@@ -1,0 +1,15 @@
+# Build outputs
+/build/
+/out/
+/dist/
+/vcpkg_installed/
+
+# IDEs
+/.vs/
+/.vscode/
+*.user
+*.suo
+CMakeUserPresets.json
+
+# Claude Code local files
+/.claude/settings.local.json

@@ -1,7 +1,7 @@
 # Arquitetura do AsciiPaper
 
 > Documento vivo: explica **porquê** o código é como é. Atualizado no fim de cada fase.
-> Estado atual: **Fase 0 (esqueleto) + Fase 1 (integração com o desktop)**.
+> Estado atual: **Fases 0–3** (esqueleto, integração com o desktop, render ASCII, rato + backend shader).
 
 ## 1. Visão geral
 
@@ -31,12 +31,16 @@
 
 | Pasta | Conteúdo |
 |---|---|
-| `src/core/` | Lógica **pura** sem Win32 (geometria, política de pausas, argumentos). É a única parte testada por unit tests. |
+| `src/core/` | Lógica **pura** sem Win32: geometria, grelha, cores, UTF-8, manifest/temas, `param()`, glifos procedurais, pausas, argumentos. É a parte testada por unit tests. |
 | `src/util/` | Log, helpers de Win32. |
-| `src/desktop/` | `WorkerW` (ligar ao Explorer), `MonitorManager` (monitores + DPI), `PauseManager` (quem tapa o quê), `Wallpaper` (guardar/repor). |
-| `src/render/` | `Device` (D3D11 partilhado), `MonitorSurface` (janela + swapchain por monitor). |
-| `src/app/` | `App` (cola tudo e corre o loop), `Tray`. |
-| `res/` | Manifesto (PerMonitorV2), ícone, `.rc` com versão. |
+| `src/desktop/` | `WorkerW` (ligar ao Explorer), `MonitorManager` (monitores + DPI), `PauseManager` (quem tapa o quê), `Wallpaper` (guardar/repor o do Windows). |
+| `src/render/` | `Device` (D3D11 partilhado), `MonitorSurface` (janela + swapchain por monitor), `GlyphAtlas`, `GridRenderer` (cell buffer + `grid.hlsl`), `ShaderCompiler`, `Screenshot`. |
+| `src/wallpaper/` | `Wallpaper` (encontrar/carregar pastas e temas), `ShaderBackend` (compute shader do wallpaper), `DirectoryWatcher` (hot reload). |
+| `src/input/` | `MouseInput` (Raw Input), `DesktopHitTest`. |
+| `src/app/` | `App` (cola tudo e corre o loop), `Tray`, `Config`. |
+| `shaders/` | `grid.hlsl` (render final), `prelude.hlsl` + `epilogue.hlsl` (a API dos wallpapers). Embebidos no `.exe` como recursos. |
+| `wallpapers/` | Os presets; copiados para junto do `.exe` em cada build. |
+| `res/` | Manifesto (PerMonitorV2), ícone, `.rc` com versão e shaders. |
 | `tests/` | doctest sobre `src/core`. |
 | `scripts/` | `setup.ps1` (ferramentas), `build.ps1`, `package.ps1` (zip de release), `make-icon.ps1`. |
 
@@ -122,6 +126,56 @@ No modelo antigo ("blt"), o DWM **copia** o nosso back buffer para a sua própri
 - **Sem GDI**: `WM_ERASEBKGND` devolve 1, `WM_PAINT` só valida, a classe não tem pincel de fundo.
 - **Device lost** (`DXGI_ERROR_DEVICE_REMOVED/RESET`, ex.: atualização ou crash do driver): libertar todas as swapchains e o dispositivo, recriar tudo; se falhar, tentar de novo a cada segundo. As janelas não são destruídas.
 
+## 7b. Render ASCII (Fase 2)
+
+```
+compute shader do wallpaper ──escreve──▶ cell buffer (1 célula = 12 bytes) ──lê──▶ grid.hlsl ──▶ swapchain
+         ▲ lê prev()                       { glifo, fg RGBA8, bg RGBA8 }            ▲ lê
+   state A ◀──troca──▶ state B                                                 atlas R8 (glifos)
+```
+
+### GlyphAtlas: porquê rasterizar por DPI
+Um glifo rasterizado a 12 px e esticado para 18 px fica desfocado; encolhido fica com serrilha. Por isso **nunca escalamos o atlas**: para cada monitor, rasterizamos todos os caracteres no tamanho exato em píxeis para o seu DPI (`cell` em px lógicos × escala). Se o DPI muda, reconstruímos (é rápido: ~200 glifos).
+- **DirectWrite** dá-nos a cobertura de cada glifo em escala de cinza (`IDWriteGlyphRunAnalysis`, 1 byte por píxel). Guardamos numa textura **R8** (só cobertura); a cor vem do cell buffer.
+- **Métricas inteiras**: a altura da célula é exatamente `ascent + descent` da fonte escalada; a largura é o avanço do `0` arredondado; a linha de base fica no mesmo píxel inteiro em todas as células. Meio píxel = blur ou costuras.
+- O atlas contém o **charset** (slots 0..N-1, na mesma ordem: assim o shader escolhe o caractere só com um índice), o **ASCII** e o **Latin-1** (para as mensagens de erro em português) e `?` para o que faltar.
+- O pixel shader lê o atlas com `Load` (o píxel exato), nunca `Sample` (filtragem = blur).
+
+### Glifos procedurais
+Blocos (`░▒▓█▀▄…`), linhas de caixa (`─│┌┐…`) e Braille vêm **desenhados por nós**, píxel a píxel, em vez da fonte. As fontes desenham-nos com pequenas folgas ou sobreposições que, numa grelha, aparecem como **riscas entre células**; desenhados à mão ocupam exatamente a célula inteira. É o que os terminais modernos (Windows Terminal, kitty, WezTerm) fazem. `▀` e `▄` dividem a célula no mesmo píxel, por isso juntos dão exatamente `█` (há um teste para isso).
+
+### grid.hlsl: um triângulo
+Para cada monitor há **uma draw call**: um triângulo que cobre o ecrã inteiro (mais barato que dois, que processariam duas vezes os píxeis da diagonal). O pixel shader calcula em que célula está, lê a célula, lê a cobertura no atlas e mistura `bg → fg`. A grelha é centrada; a margem (quando o ecrã não é múltiplo da célula) fica com a cor de fundo.
+
+## 7c. Backend shader (Fase 3)
+
+O `main.hlsl` do wallpaper define só `CellOut cell(CellIn i)`. A app monta o código final:
+
+```
+#line 1 "prelude.hlsl"   ← constantes do frame, rato, palette(), noise(), prev()...
+#line 1 "main.hlsl"      ← o código do wallpaper, com param("x") trocado por _param(índice)
+#line 1 "epilogue.hlsl"  ← [numthreads(8,8,1)] CSMain: chama cell() e escreve no cell buffer
+```
+
+- **Compute shader, uma thread por célula**: ~30 000 células por monitor 1080p são trivialidade para uma GPU, e o resultado já fica no cell buffer sem passar pela CPU.
+- **`param("speed")`**: o HLSL não tem strings. Antes de compilar, cada `param("nome")` é trocado por `_param(i)`, onde `i` é a posição do parâmetro no `[params]` do manifest; os valores vão num constant buffer. Um nome desconhecido é erro com número da linha (lógica pura, testada).
+- **`#line`**: os erros do compilador apontam para a linha certa do `main.hlsl`, não do ficheiro montado.
+- **`prev()` com double buffering**: dois buffers de estado (`float4` por célula). Num frame lê-se de A e escreve-se em B; no seguinte trocam. Assim cada célula vê o estado *anterior* de todas as vizinhas, sem corridas.
+- O `FrameConstants` em C++ é o espelho exato do `cbuffer Frame` do prelude (regras de empacotamento de 16 bytes); um `static_assert` no tamanho apanha discrepâncias.
+- **Compilação fora do thread de UI**: o `D3DCompile` pode demorar dezenas de ms. Como as nossas janelas são filhas de uma janela do Explorer (filas de input ligadas), bloquear o thread de UI bloquearia o desktop. O hot reload compila com `std::async` e avisa o thread de UI com uma mensagem. Só o **primeiro** carregamento é síncrono, *antes* de as janelas existirem, para o primeiro frame já ser o wallpaper (28 ms medidos).
+- **Erros**: manifest inválido ou shader que não compila → mantém-se o último estado bom; a mensagem aparece num canto do ecrã (escrita diretamente no cell buffer) e no log.
+
+### Hot reload
+`ReadDirectoryChangesW` **assíncrono** na pasta do wallpaper: o evento do `OVERLAPPED` entra na lista de handles do `MsgWaitForMultipleObjectsEx`. Não há thread nem polling. Ao sinalizar, esperamos 150 ms (os editores gravam em vários passos) e recarregamos.
+
+## 7d. Rato (Fase 3)
+
+- **Raw Input com `RIDEV_INPUTSINK`** numa janela *message-only*: recebemos os botões e o scroll mesmo sem foco. Um hook `WH_MOUSE_LL` poria o nosso processo no caminho de **cada** evento do rato do sistema (se demorarmos, o cursor de toda a gente fica lento, e o Windows remove hooks lentos); o Raw Input é só uma cópia entregue na nossa fila.
+- A **posição** vem de `GetCursorPos` uma vez por frame (o Raw Input só dá movimentos relativos); a velocidade é suavizada exponencialmente.
+- **Em pausa, o Raw Input é desregistado**: sem isso o sistema acordar-nos-ia a cada movimento do rato (com ratos de 1000 Hz, mil vezes por segundo).
+- **DesktopHitTest**: `WindowFromPoint` sob o cursor é `SysListView32`/`SHELLDLL_DefView`/`WorkerW`/`Progman`? Só então o rato conta (`mouse.inside`) e os cliques são aceites — clicar num browser por cima do desktop não faz ondas. Configurável com `interaction = "always"`.
+- Cada monitor recebe a posição convertida para as **suas** células (origem do monitor + margem da grelha).
+
 ## 8. Pausas (pausar = 0% de CPU)
 
 As razões são **bits** (`PauseReason`), avaliados **por monitor** pela função pura `evaluatePause` (testada):
@@ -155,20 +209,25 @@ Detalhes:
 - RAII: `wil::unique_*` para handles Win32, `Microsoft::WRL::ComPtr` para COM. Sem `new`/`delete`.
 - Presets: `msvc` (gerador Visual Studio, não precisa de Developer Shell) e `ninja-msvc` / `ninja-clang-cl` (precisam de Developer Shell; o clang-cl precisa do componente LLVM do Visual Studio).
 
-## 11. Números medidos (Fase 1, Release)
+## 11. Números medidos (v0.2.0, Release)
 
-Máquina: Windows 11 (build 26200, layout 24H2+), RTX 4060, 2 monitores (1920×1080 + 1080×1920 em coordenadas negativas), 12 threads.
+Máquina: Windows 11 (build 26200, layout 24H2+), RTX 4060, 2 monitores (1920×1080 + 1080×1920 em coordenadas negativas), 12 threads. Comando: `asciipaper.exe --bench 6` com o `ripple` (60 FPS, células de 6×12 px, 28 800 células por monitor).
 
 | Métrica | Valor | Alvo |
 |---|---|---|
-| Binário | 494 KB | < 5 MB |
-| CPU média (1 monitor a desenhar a 30 FPS, outro em pausa) | 0,05% | < 2% |
-| Working set (2 monitores) | 39 MB | < 30 MB por monitor |
-| Arranque até ao primeiro frame | ~240 ms (inclui criar o dispositivo D3D) | < 300 ms |
+| Binário | 909 KB | < 5 MB |
+| CPU do processo (2 monitores a 60 FPS) | 0,17% | < 2% |
+| Frame time em CPU (compute + draw + Present, 2 monitores) | médio 0,41 ms, p99 0,97 ms | — |
+| RAM (2 monitores) | working set 51,5 MB, private bytes 57,4 MB (~26 MB/monitor) | < 30 MB por monitor |
+| Arranque até ao primeiro frame (inclui compilar o wallpaper) | 239 ms | < 300 ms |
+| Carregar + compilar um wallpaper | 28 ms | — |
 
-> Nota sobre RAM: uma boa parte do working set são as DLLs do driver da GPU carregadas no processo, que não controlamos. O `--bench` (Fase 2) vai reportar *private bytes* e working set separadamente.
+> Notas: o frame time é medido em CPU; o trabalho da GPU é assíncrono e não entra (com esta carga, é desprezável). Uma parte grande da RAM são as DLLs do driver da GPU carregadas no processo, que não controlamos. A Fase 1 (só cor) media 0,05% de CPU com um monitor ativo a 30 FPS.
 
 ## 12. Decisões em aberto
 
 - **clang-cl**: os presets existem, mas o componente LLVM do Visual Studio ainda não está instalado nesta máquina, por isso o build com clang-cl ainda não foi verificado.
 - **Monitores em GPUs diferentes**: um único dispositivo D3D; avaliar um dispositivo por adaptador se o custo da cópia entre GPUs se notar.
+- **Texto a 200% de escala**: o atlas é sempre rasterizado para o DPI real, mas o critério da Fase 2 ("células de 6 px nítidas a 200%") ainda não foi verificado num monitor a 200%.
+- **Glow/bloom** (opcional na spec, desligado por defeito): ainda não implementado.
+- **Cache de shaders compilados**: o arranque cumpre o orçamento sem cache (28 ms a compilar). Se wallpapers maiores o ultrapassarem, guardar o bytecode em `%LOCALAPPDATA%`.

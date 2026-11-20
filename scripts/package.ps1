@@ -12,6 +12,8 @@ Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $stage | Out-Null
 
 Copy-Item (Join-Path $root 'build\msvc\Release\asciipaper.exe') $stage
+Copy-Item (Join-Path $root 'wallpapers') (Join-Path $stage 'wallpapers') -Recurse
+Copy-Item (Join-Path $root 'docs\CREATING_WALLPAPERS.md') $stage
 Copy-Item (Join-Path $root 'README.md'), (Join-Path $root 'LICENSE'), (Join-Path $root 'CHANGELOG.md') $stage
 
 $zip = Join-Path $root "dist\$name.zip"

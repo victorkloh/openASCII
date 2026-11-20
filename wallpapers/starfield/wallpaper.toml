@@ -1,0 +1,22 @@
+[meta]
+name = "Starfield"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Voo pelas estrelas; a posição do rato define a direção"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 60
+cell = 12
+font = "Cascadia Mono"
+charset = " .·:+*×#@"
+
+[colors]
+background = "#000004"
+palette = ["#000004", "#1b2450", "#6f86d6", "#dfe7ff", "#ffffff"]
+
+[params]
+speed   = { default = 1.0, min = 0.0, max = 5.0 }
+density = { default = 0.2, min = 0.05, max = 1.0 }
+trails  = { default = 0.75, min = 0.0, max = 0.97 } # quanto tempo fica o rasto

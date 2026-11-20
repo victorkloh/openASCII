@@ -1,0 +1,10 @@
+# Só zeros e uns, grandes e lentos, em azul gelo.
+base = "matrix"
+cell = 24
+charset = " 01"
+background = "#00040a"
+palette = ["#00040a", "#06264d", "#2a7fd4", "#b8e6ff"]
+
+[params]
+speed = 0.5
+radius = 6.0

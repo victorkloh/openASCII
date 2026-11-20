@@ -1,0 +1,9 @@
+# Grelha grossa com blocos (desenhados à mão, sem costuras entre células).
+base = "ripple"
+cell = 22
+charset = " ░▒▓█"
+background = "#020a06"
+palette = ["#020a06", "#0f3d22", "#2fa35a", "#a6f5c0"]
+
+[params]
+contrast = 2.2

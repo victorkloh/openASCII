@@ -1,0 +1,10 @@
+# Mapa topográfico monocromático, células grandes em blocos.
+base = "terrain"
+cell = 18
+charset = " ░▒▓█"
+background = "#050505"
+palette = ["#0b0b0b", "#1c1c1c", "#3a3a3a", "#6a6a6a", "#a0a0a0", "#e8e8e8"]
+
+[params]
+clouds = 0.0
+scale = 1.6

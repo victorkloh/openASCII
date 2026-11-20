@@ -1,0 +1,10 @@
+# Dunas ao pôr do sol, grelha fina.
+base = "terrain"
+cell = 8
+charset = " .·:-=≈+*#"
+palette = ["#2b1408", "#6e3410", "#d98b3a", "#f2c58a", "#a5562a", "#fff0d9"]
+
+[params]
+scale = 3.5
+clouds = 0.2
+speed = 0.6

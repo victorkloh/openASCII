@@ -1,0 +1,8 @@
+# Modo "alta resolução" com Braille: os pontos parecem estrelas pequeninas.
+base = "starfield"
+cell = 14
+charset = " ⠁⠃⠇⡇⡏⡟⡿⣿"
+palette = ["#000004", "#22305e", "#8aa4ff", "#ffffff"]
+
+[params]
+density = 0.5

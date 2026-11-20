@@ -1,0 +1,9 @@
+# Velocidade de dobra: rastos longos e cores quentes.
+base = "starfield"
+cell = 9
+charset = " .:-=+*#"
+palette = ["#000000", "#3a0b2e", "#c2306b", "#ffb36b", "#ffffff"]
+
+[params]
+speed = 3.0
+trails = 0.93

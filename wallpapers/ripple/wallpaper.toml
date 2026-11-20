@@ -1,0 +1,23 @@
+[meta]
+name = "Ripple"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Água ASCII: o rato deixa ondas, clicar cria uma onda forte"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 60
+cell = 12
+font = "Cascadia Mono"
+charset = " .·:-=+*o#%@"
+
+[colors]
+background = "#03060c"
+palette = ["#03060c", "#0b2a4a", "#1d6fa5", "#5cc8f0", "#e6f7ff"]
+
+[params]
+damping = { default = 0.985, min = 0.9,  max = 0.999 } # quanto as ondas duram
+strength = { default = 1.0,  min = 0.0,  max = 4.0 }   # força do rasto do rato
+rain     = { default = 1.5,  min = 0.0,  max = 6.0 }   # gotas aleatórias por segundo
+contrast = { default = 1.6,  min = 0.2,  max = 5.0 }

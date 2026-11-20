@@ -1,0 +1,9 @@
+# Monitor de fósforo âmbar, grelha fina.
+base = "matrix"
+cell = 9
+background = "#0a0600"
+palette = ["#0a0600", "#4d2a00", "#c27400", "#ffc04d"]
+
+[params]
+speed = 1.6
+density = 0.9

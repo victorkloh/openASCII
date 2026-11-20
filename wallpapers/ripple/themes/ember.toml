@@ -1,0 +1,10 @@
+# Ondas em brasa, grelha fina.
+base = "ripple"
+cell = 8
+charset = " .:-=+*#%@"
+background = "#0a0302"
+palette = ["#0a0302", "#4a1004", "#b8380c", "#ff8a2a", "#fff1c9"]
+
+[params]
+damping = 0.99
+rain = 1.5

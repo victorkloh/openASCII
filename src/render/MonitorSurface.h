@@ -7,6 +7,8 @@
 #include "core/PausePolicy.h"
 #include "desktop/MonitorManager.h"
 #include "render/Device.h"
+#include "render/GlyphAtlas.h"
+#include "render/GridRenderer.h"
 
 namespace ap::render {
 
@@ -31,20 +33,29 @@ public:
     void destroy();
 
     HRESULT createSwapChain(Device& device, int width, int height);
-    void releaseSwapChain();
+    void releaseSwapChain(); // também liberta o atlas e a grelha (recursos do dispositivo)
     HRESULT resize(Device& device, int width, int height);
-    // Desenha um frame e apresenta-o. Devolve o HRESULT do Present (para detetar device lost).
-    HRESULT render(Device& device, double timeSeconds);
+    // Apresenta o frame já desenhado em rtv(). Devolve o HRESULT (para detetar device lost).
+    HRESULT present();
 
     HWND hwnd() const { return hwnd_; }
+    ID3D11RenderTargetView* rtv() const { return rtv_.Get(); }
+    ComPtr<ID3D11Texture2D> backBuffer() const {
+        ComPtr<ID3D11Texture2D> t;
+        if (swap_) swap_->GetBuffer(0, IID_PPV_ARGS(&t));
+        return t;
+    }
     bool hasSwapChain() const { return swap_ != nullptr; }
     int width() const { return width_; }
     int height() const { return height_; }
     bool usesFlipModel() const { return flip_; }
 
     desktop::MonitorInfo monitor;      // monitor que esta superfície cobre
-    unsigned index = 0;                // só para variar a cor entre monitores
+    unsigned index = 0;
     PauseReason pause = PauseReason::None;
+
+    GlyphAtlas atlas;   // por monitor: depende do DPI
+    GridRenderer grid;  // cell buffer + estado prev()
 
 private:
     static LRESULT CALLBACK wndProc(HWND, UINT, WPARAM, LPARAM);

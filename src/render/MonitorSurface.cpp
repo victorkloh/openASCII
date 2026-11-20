@@ -8,28 +8,7 @@
 namespace ap::render {
 
 namespace {
-
 constexpr wchar_t kClassName[] = L"AsciiPaperSurface";
-
-void hsvToRgb(float h, float s, float v, float out[4]) {
-    const float i = std::floor(h * 6.0f);
-    const float f = h * 6.0f - i;
-    const float p = v * (1.0f - s), q = v * (1.0f - f * s), t = v * (1.0f - (1.0f - f) * s);
-    float r = v, g = t, b = p;
-    switch (static_cast<int>(i) % 6) {
-    case 0: r = v, g = t, b = p; break;
-    case 1: r = q, g = v, b = p; break;
-    case 2: r = p, g = v, b = t; break;
-    case 3: r = p, g = q, b = v; break;
-    case 4: r = t, g = p, b = v; break;
-    case 5: r = v, g = p, b = q; break;
-    }
-    out[0] = r;
-    out[1] = g;
-    out[2] = b;
-    out[3] = 1.0f;
-}
-
 } // namespace
 
 bool MonitorSurface::registerClass(HINSTANCE instance) {
@@ -115,6 +94,8 @@ HRESULT MonitorSurface::createSwapChain(Device& device, int width, int height) {
 }
 
 void MonitorSurface::releaseSwapChain() {
+    grid.reset();
+    atlas.reset();
     rtv_.Reset();
     swap_.Reset();
 }
@@ -152,34 +133,10 @@ HRESULT MonitorSurface::resize(Device& device, int width, int height) {
     return createTarget(device);
 }
 
-HRESULT MonitorSurface::render(Device& device, double timeSeconds) {
-    if (!swap_ || !rtv_) {
+HRESULT MonitorSurface::present() {
+    if (!swap_) {
         return S_OK;
     }
-    // Fase 1: só uma cor animada (com uma moldura e um quadrado ao centro em px lógicos,
-    // para se ver logo se o DPI ou o tamanho estão errados: moldura cortada = bug).
-    const float hue = static_cast<float>(std::fmod(timeSeconds * 0.03 + index * 0.27, 1.0));
-    float background[4];
-    float accent[4];
-    hsvToRgb(hue, 0.55f, 0.28f, background);
-    hsvToRgb(hue, 0.35f, 0.85f, accent);
-
-    device.context()->ClearRenderTargetView(rtv_.Get(), background);
-    if (auto* ctx1 = device.context1()) {
-        const unsigned dpi = monitor.dpi ? monitor.dpi : 96;
-        const int b = scaleByDpi(6, dpi);
-        const int sq = scaleByDpi(48, dpi);
-        const int cx = width_ / 2, cy = height_ / 2;
-        const D3D11_RECT rects[] = {
-            {0, 0, width_, b},                                // cima
-            {0, height_ - b, width_, height_},                // baixo
-            {0, 0, b, height_},                               // esquerda
-            {width_ - b, 0, width_, height_},                 // direita
-            {cx - sq / 2, cy - sq / 2, cx + sq / 2, cy + sq / 2}, // quadrado de 48 px lógicos
-        };
-        ctx1->ClearView(rtv_.Get(), accent, rects, static_cast<UINT>(std::size(rects)));
-    }
-
     // SyncInterval 0: o ritmo vem do nosso timer. Com várias swapchains, Present(1)
     // bloquearia à espera do vsync uma vez por monitor.
     HRESULT hr = swap_->Present(0, 0);

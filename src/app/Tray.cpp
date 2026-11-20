@@ -43,12 +43,26 @@ void Tray::remove() {
     }
 }
 
-void Tray::showMenu(bool paused) {
+void Tray::showMenu(const TrayMenuState& state) {
     wil::unique_hmenu menu(CreatePopupMenu());
     if (!menu) {
         return;
     }
-    AppendMenuW(menu.get(), MF_STRING, ID_TRAY_PAUSE, paused ? L"Retomar" : L"Pausar");
+    // Submenu com os wallpapers e temas encontrados. O menu principal fica dono dele.
+    HMENU sub = CreatePopupMenu();
+    const int max = ID_TRAY_WALLPAPER_LAST - ID_TRAY_WALLPAPER_FIRST;
+    for (int i = 0; i < static_cast<int>(state.wallpapers.size()) && i <= max; ++i) {
+        const UINT flags = MF_STRING | (i == state.current ? MF_CHECKED : 0u);
+        AppendMenuW(sub, flags, ID_TRAY_WALLPAPER_FIRST + static_cast<UINT>(i), state.wallpapers[static_cast<size_t>(i)].c_str());
+    }
+    if (state.wallpapers.empty()) {
+        AppendMenuW(sub, MF_STRING | MF_GRAYED, 0, L"(nenhum wallpaper encontrado)");
+    }
+    AppendMenuW(menu.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(sub), L"Wallpaper");
+    AppendMenuW(menu.get(), MF_STRING, ID_TRAY_RELOAD, L"Recarregar wallpaper");
+    AppendMenuW(menu.get(), MF_STRING, ID_TRAY_PAUSE, state.paused ? L"Retomar" : L"Pausar");
+    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu.get(), MF_STRING, ID_TRAY_OPEN_WALLPAPERS, L"Abrir pasta de wallpapers");
     AppendMenuW(menu.get(), MF_STRING, ID_TRAY_OPEN_LOG, L"Abrir pasta de logs");
     AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu.get(), MF_STRING, ID_TRAY_EXIT, L"Sair");

@@ -168,11 +168,11 @@ O `main.hlsl` do wallpaper define só `CellOut cell(CellIn i)`. A app monta o c�
 ### Hot reload
 `ReadDirectoryChangesW` **assíncrono** na pasta do wallpaper: o evento do `OVERLAPPED` entra na lista de handles do `MsgWaitForMultipleObjectsEx`. Não há thread nem polling. Ao sinalizar, esperamos 150 ms (os editores gravam em vários passos) e recarregamos.
 
-## 7d. Rato (Fase 3)
+## 7d. Rato (Fase 3, revisto na v0.4)
 
-- **Raw Input com `RIDEV_INPUTSINK`** numa janela *message-only*: recebemos os botões e o scroll mesmo sem foco. Um hook `WH_MOUSE_LL` poria o nosso processo no caminho de **cada** evento do rato do sistema (se demorarmos, o cursor de toda a gente fica lento, e o Windows remove hooks lentos); o Raw Input é só uma cópia entregue na nossa fila.
-- A **posição** vem de `GetCursorPos` uma vez por frame (o Raw Input só dá movimentos relativos); a velocidade é suavizada exponencialmente.
-- **Em pausa, o Raw Input é desregistado**: sem isso o sistema acordar-nos-ia a cada movimento do rato (com ratos de 1000 Hz, mil vezes por segundo).
+- **v0.3 usava Raw Input com `RIDEV_INPUTSINK`**, como pedia a spec. Medição na v0.4 (`--bench` + cursor a mexer com input injetado): o loop passou de **31 para ~500 despertares/s** e de 1 para **~370 mensagens/s** — uma `WM_INPUT` por cada movimento do rato no sistema inteiro, mesmo com o cursor sobre outras janelas. Pior: como as nossas janelas são filhas de uma janela do Explorer, a nossa fila de input está **ligada** à dele, e estas mensagens misturam-se com o input do ambiente de trabalho. Resultado visível: o fundo perdia FPS ao mexer o rato.
+- **v0.4: amostragem por frame.** `GetCursorPos` + `GetAsyncKeyState` (com `SM_SWAPBUTTON` para canhotos) uma vez por frame, e só quando há algo a desenhar. Zero mensagens, zero despertares extra; medido: 31 despertares/s e 1 mensagem/s com o rato a mexer, 0 engasgos. Um clique conta se o botão estava em baixo num frame (cliques têm ~100 ms; a 30 fps um frame são 33 ms). Perdeu-se a roda do rato (`mouse.scroll` = 0), que nenhum preset usava. Continua sem hooks `WH_MOUSE_LL`.
+- **Presença**: por canvas, um valor 0..1 que sobe depressa (~0,1 s) quando o cursor entra no fundo e desce devagar (~0,5 s) quando sai, e a última posição sobre o fundo fica guardada. Os presets multiplicam os efeitos do rato por `mouse.presence` e os de parallax interpolam para a posição neutra: transições suaves em vez de saltos.
 - **DesktopHitTest**: `WindowFromPoint` sob o cursor é `SysListView32`/`SHELLDLL_DefView`/`WorkerW`/`Progman`? Só então o rato conta (`mouse.inside`) e os cliques são aceites — clicar num browser por cima do desktop não faz ondas. Configurável com `interaction = "always"`.
 - Cada monitor recebe a posição convertida para as **suas** células (origem do monitor + margem da grelha).
 
@@ -208,6 +208,14 @@ Até à v0.2 cada monitor tinha a sua grelha e a sua simulação; com o mesmo `t
 - **Ajustes ao vivo**: os ajustes do utilizador são um `Theme` sem `base` (`%APPDATA%\AsciiPaper\overrides\<wallpaper>.toml`). Mudar cores ou parâmetros só muda constantes (instantâneo); mudar fonte, resolução ou caracteres reconstrói o atlas; nada disto recompila o shader. Grava no disco ao largar o slider.
 - **Design**: superfícies neutras escuras (`#0f1115`/`#161920`/`#1e222b`), texto com contraste ≥ 4,5:1, Segoe UI Variable nos controlos e Cascadia Mono nos valores e nos títulos de secção (`// grelha`), controlos com ≥ 28 px. A cor de destaque é **a do wallpaper ativo** (a mais viva da paleta, ajustada para contraste): a interface "veste" o wallpaper.
 - `--ui-screenshot` / `--flyout-screenshot` desenham a interface num PNG (render target WIC), para documentação e testes visuais sem janelas.
+
+## 7g. Convivência com o Wallpaper Engine e o Lively (v0.4)
+
+Estas apps também desenham por trás dos ícones; ao mesmo tempo que nós, aparecem frames delas por baixo. `desktop/OtherWallpaperApps` deteta os processos (`wallpaper32/64.exe`, `Lively.exe`) e usa os **comandos oficiais de linha de comandos** de cada uma: Wallpaper Engine `-control stop` / `-control play`, Lively `app --play false` / `--play true`. São controlos de execução, não alteram configurações nem os wallpapers escolhidos nelas. Política na config (`other_apps_on_start`: perguntar/pausar/ignorar; `other_apps_on_exit`: perguntar/retomar/deixar), com uma janela de confirmação própria (`ui/ConfirmDialog`) e "lembrar a escolha". Se a app fechar sem diálogo (`taskkill`, encerramento do Windows), retoma-as por defeito: desfazemos o que fizemos.
+
+## 7h. FPS do fundo (v0.4)
+
+`fps = 0` (automático) usa o FPS do wallpaper, limitado por `max_fps`; um valor fixo (15–144) vale para todos e ignora o limite. Mudar o FPS rearma o timer de frames no momento.
 
 ## 8. Pausas (pausar = 0% de CPU)
 

@@ -2,6 +2,22 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-PT/).
 
+## [0.4.0] — 2026-11-20
+
+### Adicionado
+- **8 efeitos novos**, escolhidos a partir de pesquisa sobre o que é mais popular em wallpapers animados e arte ASCII: `synthwave`, `aurora`, `rain` (janela lofi), `aquarium`, `clock`, `fire`, `fireworks`, `donut` — cada um com uma variante.
+- **FPS do fundo**: automático (cada wallpaper decide) ou fixo (15–144), no menu da bandeja e nas Definições (`fps` na config).
+- **Compatibilidade com Wallpaper Engine e Lively**: deteta-os ao arrancar e pergunta se os pausa (Wallpaper Engine: `-control stop`/`play`; Lively: `app --play false/true`, os comandos oficiais deles, sem mexer nas definições); ao sair pergunta se os retoma. "Lembrar a escolha" e opções nas Definições.
+- **Presença do rato** (`mouse.presence`): os efeitos do rato entram e saem com uma transição suave e voltam ao repouso quando o rato sai do fundo.
+- Prelude: `localTime`/`localDate` (relógios), `primaryCenter()`, `primaryCenterWorld()`, `primarySizeWorld()`, `primaryRect()`, `monitorRectAt(c)`.
+- Diagnóstico de desempenho: o `--bench` mede o tempo de GPU (queries de timestamp), o `Present`, os engasgos e as vezes que o loop acorda; o `--verbose` regista o mesmo a cada 5 s e avisa de mensagens lentas.
+- `ideias.md`: brainstorm de efeitos avançados, ordenado.
+
+### Corrigido
+- **O fundo perdia FPS ao mexer o rato** (sobretudo dentro de janelas): o Raw Input com `RIDEV_INPUTSINK` recebia uma mensagem por cada movimento do rato no sistema inteiro, numa fila de input ligada à do Explorer. Agora o rato é lido uma vez por frame (`GetCursorPos` + `GetAsyncKeyState`): medido 500 → 31 despertares/s e 370 → 1 mensagem/s com o rato a mexer, 0 engasgos.
+- `taskkill` sem `/f` voltou a fechar a app com limpeza (o `WM_CLOSE` chegava à janela escondida do launcher).
+- Otimizações de GPU: o valley calcula o relevo só onde há um animal (o HLSL avalia os dois lados de `&&`); o donut salta o raymarching longe do centro.
+
 ## [0.3.0] — 2026-11-20
 
 ### Adicionado
@@ -60,6 +76,7 @@ Primeira versão alpha: **Fases 0 e 1** (esqueleto + integração com o desktop)
 - Modo `--windowed` para desenvolvimento.
 - Testes unitários (doctest): geometria/coordenadas do ecrã virtual, DPI, política de pausas, argumentos.
 
+[0.4.0]: ../../releases/tag/v0.4.0
 [0.3.0]: ../../releases/tag/v0.3.0
 [0.2.0]: ../../releases/tag/v0.2.0
 [0.1.0]: ../../releases/tag/v0.1.0

@@ -110,11 +110,12 @@ No modo estendido (por defeito), `grid` e `worldSize` cobrem **todos** os monito
 | `mouse.pos`, `mouse.world` | posição em células / em mundo (pode estar fora da grelha) |
 | `mouse.vel`, `mouse.velWorld` | velocidade suavizada (células/s, mundo/s) |
 | `mouse.clickWorld` | onde foi o último clique, em mundo |
+| `mouse.presence` | 0..1 suave: **multiplica os efeitos do rato por isto**. Sobe quando o rato entra no fundo e desce devagar quando sai; enquanto desce, `mouse.pos` fica na última posição. Para parallax: `lerp(neutro, alvo, mouse.presence)` |
 | `mouse.inside` | o rato está sobre o ambiente de trabalho deste monitor |
 | `mouse.buttons` | `MOUSE_LEFT`, `MOUSE_RIGHT`, `MOUSE_MIDDLE` (só cliques que começaram no desktop) |
 | `mouse.clickPos`, `mouse.clickTime`, `mouse.clickButton` | último clique |
 | `justClicked()` | o clique aconteceu neste frame |
-| `mouse.scroll` | entalhes de scroll neste frame |
+| `mouse.scroll` | reservado (sempre 0: o rato é lido sem mensagens desde a v0.4) |
 
 Por defeito o wallpaper só reage quando o rato está **sobre o desktop** (não sobre outras janelas). Muda com `interaction = "always"` no `config.toml`.
 
@@ -126,6 +127,10 @@ Por defeito o wallpaper só reage quando o rato está **sobre o desktop** (não 
 | `prev(int2 c)` | o `state` que a célula `c` escreveu no frame anterior (fora da grelha = borda) |
 | `glyph(k)` | para `o.glyph`: o caractere `k` da lista `glyphs` do toml (sprites: animais, pássaros...) |
 | `visible(int2 c)` | a célula `c` está dentro de algum monitor? |
+| `primaryCenterWorld()`, `primarySizeWorld()` | centro e tamanho do monitor principal em mundo (para centrar um relógio, um sol, um modelo 3D) |
+| `primaryCenter()`, `primaryRect()` | o mesmo em células |
+| `monitorRectAt(int2 c)` | retângulo (células) do monitor onde está `c`: o "chão" de cada ecrã para fogo, areia, aquários |
+| `localTime`, `localDate` | hora (h, m, s com fração) e data (ano, mês, dia, dia da semana) locais |
 | `cellDistance(a, b)` | distância em alturas de célula, corrigida para ficar redonda no ecrã |
 | `noise(p)`, `fbm(p)` | ruído suave em [0,1], 2D ou 3D; `fbm` soma 5 oitavas |
 | `hash11`, `hash21`, `hash22`, `hash33` | pseudo-aleatório em [0,1) |

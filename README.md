@@ -2,18 +2,26 @@
 
 **Wallpapers ASCII animados e interativos para Windows 10/11**, desenhados atrás dos ícones do ambiente de trabalho. Um único `.exe` nativo e pequeno (C++20, Win32, Direct3D 11), sem browser embutido nem runtime pesado. Cada wallpaper é programável e fácil de partilhar.
 
-| valley | ripple |
-|---|---|
-| ![valley](wallpapers/valley/preview.png) | ![ripple](wallpapers/ripple/preview.png) |
-| **matrix** | **starfield** |
-| ![matrix](wallpapers/matrix/preview.png) | ![starfield](wallpapers/starfield/preview.png) |
+| synthwave | aurora | aquarium |
+|---|---|---|
+| ![synthwave](wallpapers/synthwave/preview.png) | ![aurora](wallpapers/aurora/preview.png) | ![aquarium](wallpapers/aquarium/preview.png) |
+| **valley** | **clock** | **fire** |
+| ![valley](wallpapers/valley/preview.png) | ![clock](wallpapers/clock/preview.png) | ![fire](wallpapers/fire/preview.png) |
 
-> **Estado: alpha (v0.3.0).** Fases 0–3 feitas, mais o launcher e o menu da bandeja (parte da Fase 5). Os wallpapers em Lua (fluid, particles, life, clock) chegam na Fase 4. Ver o [roadmap](#roadmap).
+> **Estado: alpha (v0.4.0).** Fases 0–3 feitas, mais o launcher e o menu da bandeja (parte da Fase 5). Os wallpapers em Lua (fluid, particles, life, clock) chegam na Fase 4. Ver o [roadmap](#roadmap).
 
 ## Efeitos incluídos
 
 | Wallpaper | Interação | Variantes |
 |---|---|---|
+| **synthwave** | pôr do sol retro, sol às riscas, montanhas néon, grelha infinita; o rato move a câmara | `vapor` |
+| **aurora** | aurora boreal sobre montanhas e lago; o rato agita as cortinas; clicar lança uma estrela cadente | `crimson` |
+| **rain** | janela de noite de chuva com a cidade desfocada; passar/arrastar o rato limpa o vidro embaciado | `neon` |
+| **aquarium** | peixes, bolhas, algas e areia; os peixes fogem do rato; clicar deixa cair comida | `abyss` |
+| **clock** | relógio grande em blocos, com data em português e barra dos segundos | `amber` (12 h) |
+| **fire** | fogo ASCII clássico a subir do fundo de cada ecrã; o rato acende chamas; clicar explode | `spirit` |
+| **fireworks** | fogo de artifício sobre a cidade, com rastos; clicar lança um foguete | `gold` |
+| **donut** | o donut 3D do terminal, por raymarching; o rato inclina-o; clicar dá-lhe um empurrão | `sprinkles` |
 | **valley** | mapa vivo: chuvadas, nuvens com sombra, manadas que fogem do rato, pássaros em V, peixes, aldeias que acendem à noite, ciclo dia/noite; clicar faz cair um relâmpago | `autumn`, `miniature` |
 | **ripple** | o rato deixa ondas na água; clicar atira uma pedra; chove de vez em quando | `ember`, `blocks` |
 | **matrix** | chuva de caracteres; as colunas desviam-se do cursor | `amber`, `binary` |
@@ -43,7 +51,11 @@ A interface segue o tema claro/escuro do Windows e usa como cor de destaque a co
 - Recupera sozinha se o **Explorer** reiniciar ou o **driver da GPU** reiniciar.
 - **Ao sair, repõe o wallpaper original** do Windows.
 
-Medido (Release, RTX 4060, 2 monitores 1080p a 60 fps): **0,17% de CPU**, 0,4 ms por frame, ~26 MB de RAM por monitor, primeiro frame em 240 ms, `.exe` de ~0,9 MB.
+Medido (Release, RTX 4060, 2 monitores, valley a 30 fps): **0,7% de CPU**, GPU 0,19 ms por frame, 0 engasgos com o rato a mexer, ~26 MB de RAM por monitor.
+
+- **FPS do fundo** à tua escolha (automático ou 15–144), no menu da bandeja e nas Definições.
+- **O rato não custa nada:** é lido uma vez por frame (sem mensagens por cada movimento) e só conta sobre o ambiente de trabalho; quando sai, os efeitos voltam suavemente ao repouso.
+- **Convive com o Wallpaper Engine e o Lively:** ao arrancar pergunta se os pausa (com os comandos deles, sem mexer nas definições) e ao sair pergunta se os retoma.
 
 ## Instalar e usar
 

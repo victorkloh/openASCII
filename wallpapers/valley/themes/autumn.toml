@@ -1,0 +1,8 @@
+# Outono: florestas acobreadas, mais chuva, dias curtos.
+base = "valley"
+palette = ["#0b1a2a", "#1f4e6e", "#c9a46a", "#a8572a", "#5e4b3c", "#efe6d8"]
+
+[params]
+rain = 1.0
+clouds = 0.8
+daylength = 4.0

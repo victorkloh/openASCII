@@ -1,0 +1,7 @@
+# Maquete: grelha grossa em blocos (a paisagem fica do mesmo tamanho, só muda a resolução).
+base = "valley"
+cell = 20
+charset = " ░▒▓█"
+
+[params]
+birds = 0.6

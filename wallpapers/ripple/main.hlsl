@@ -3,6 +3,11 @@
 // Cada célula guarda no `state` a altura da água agora (x) e no frame anterior (y).
 // A altura nova depende da média dos vizinhos (via prev()) e da altura de há dois frames:
 // é isto que faz as ondas propagarem-se, refletirem nas bordas e interferirem entre si.
+//
+// No modo estendido o canvas cobre todos os monitores: uma onda que sai de um ecrã entra
+// no outro. As zonas fora dos monitores têm altura 0 e funcionam como paredes.
+// Os impulsos (rato, cliques, gotas) são medidos em unidades de mundo, por isso têm o
+// mesmo tamanho com qualquer resolução da grelha.
 
 CellOut cell(CellIn i)
 {
@@ -18,22 +23,23 @@ CellOut cell(CellIn i)
     float lapX = prev(c + int2(-1, 0)).x + prev(c + int2(1, 0)).x - 2.0 * here.x;
     float lapY = prev(c + int2(0, -1)).x + prev(c + int2(0, 1)).x - 2.0 * here.x;
 
-    float h = 2.0 * here.x - here.y + 0.95 * (wx * lapX + wy * lapY);
+    // param("speed") é o número de Courant: até 1 a simulação é estável.
+    float h = 2.0 * here.x - here.y + param("speed") * (wx * lapX + wy * lapY);
     h *= param("damping");
 
     // O rato a mexer-se perturba a água à sua volta, proporcionalmente à velocidade.
-    float d = cellDistance(i.pos, mouse.pos);
     if (mouse.inside)
     {
-        float speed = min(length(mouse.vel * float2(cellAspect, 1.0)) * 0.004, 1.0);
-        h += exp(-d * d * 0.35) * speed * 0.6 * param("strength");
+        float d = length(i.world - mouse.world);
+        float speed = min(length(mouse.velWorld) * 0.0035, 1.0);
+        h += exp(-d * d * 0.24) * speed * 0.6 * param("strength");
     }
 
     // Clique: uma pedrada forte (só no frame do clique).
     if (justClicked())
     {
-        float dc = cellDistance(i.pos, mouse.clickPos);
-        h -= 3.0 * exp(-dc * dc * 0.15);
+        float dc = length(i.world - mouse.clickWorld);
+        h -= 3.0 * exp(-dc * dc * 0.1);
     }
 
     // Chuva: de vez em quando uma gota num sítio aleatório, para nunca ficar parado.
@@ -43,9 +49,9 @@ CellOut cell(CellIn i)
         float slot = floor(time * rate);
         if (floor((time - dt) * rate) != slot) // a gota cai neste frame
         {
-            float2 drop = hash22(float2(slot, 7.13)) * float2(grid);
-            float dd = cellDistance(i.pos, drop);
-            h -= 1.0 * exp(-dd * dd * 0.5);
+            float2 drop = hash22(float2(slot, 7.13)) * worldSize;
+            float dd = length(i.world - drop);
+            h -= 1.0 * exp(-dd * dd * 0.35);
         }
     }
 

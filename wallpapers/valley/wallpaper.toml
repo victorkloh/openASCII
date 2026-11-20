@@ -1,0 +1,34 @@
+[meta]
+name = "Valley"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Terrain vivo: chuva, nuvens com sombra, animais, pássaros, peixes, aldeias e um ciclo dia/noite. Clica para um relâmpago."
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 11
+scale = 10
+font = "Cascadia Mono"
+charset = " .,:;~=+*#%@"
+# Sprites (glyph(k) no shader):
+#  0 v  1 ^  pássaros (asas em baixo/em cima)   2 m  3 n  animais a andar
+#  4 <  5 >  peixes   6 /  chuva   7 '  gota   8 ,  salpico   9 ♣  árvore
+# 10 ⌂  casa   11 ¦  relâmpago
+glyphs = "v^mn<>/',♣⌂¦"
+
+[colors]
+background = "#02040a"
+# água funda -> água -> areia -> erva -> rocha -> neve
+palette = ["#06142e", "#12457a", "#c9b27a", "#3f7d3a", "#6b6157", "#f2f4f7"]
+
+[params]
+speed     = { default = 1.0,  min = 0.0, max = 6.0 }  # vento e deriva da paisagem
+scale     = { default = 2.2,  min = 0.5, max = 8.0 }  # tamanho do relevo
+parallax  = { default = 1.0,  min = 0.0, max = 3.0 }
+clouds    = { default = 0.6,  min = 0.0, max = 1.0 }
+rain      = { default = 0.7,  min = 0.0, max = 1.0 }  # quão frequentes são as chuvadas
+animals   = { default = 1.0,  min = 0.0, max = 2.0 }
+birds     = { default = 1.0,  min = 0.0, max = 2.0 }
+daylength = { default = 8.0,  min = 1.0, max = 60.0 } # minutos por dia completo

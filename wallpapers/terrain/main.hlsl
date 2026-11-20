@@ -7,12 +7,12 @@ float heightAt(float2 p) { return saturate((fbm(p) - 0.5) * 1.9 + 0.5); }
 
 CellOut cell(CellIn i)
 {
-    // Coordenadas com a proporção certa (células são mais altas que largas).
-    float2 p = i.uv * float2(float(grid.x) * cellAspect / float(grid.y), 1.0);
+    // Coordenadas de mundo: o tamanho da paisagem não depende da resolução da grelha.
+    float2 p = i.world / 120.0;
 
     // O parallax segue o rato suavemente: cada célula guarda a mesma posição suavizada
     // no state (todas calculam o mesmo valor), assim não há saltos quando o rato entra/sai.
-    float2 target = mouse.inside ? (mouse.pos / float2(grid) - 0.5) : float2(0, 0);
+    float2 target = mouse.inside ? (mouse.world / worldSize - 0.5) : float2(0, 0);
     float2 smoothed = prev(int2(i.id)).xy;
     smoothed = lerp(smoothed, target, 1.0 - exp(-dt * 2.5));
     float2 par = smoothed * param("parallax");

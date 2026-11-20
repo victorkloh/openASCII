@@ -2,6 +2,23 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-PT/).
 
+## [0.3.0] — 2026-11-20
+
+### Adicionado
+- **Efeito estendido entre monitores**: um só canvas cobre todos os ecrãs (como o modo Estender do Windows). Uma onda que sai de um monitor entra no outro; com DPIs diferentes a escala física mantém-se. As zonas fora dos monitores são "paredes". Opção nas Definições (`span_monitors`).
+- **Valley**: um terrain vivo com chuvadas, nuvens com sombra, manadas que fogem do rato, pássaros em V, peixes, florestas, aldeias que acendem à noite, ciclo dia/noite e relâmpagos ao clicar. Variantes `autumn` e `miniature`.
+- **Menu da bandeja próprio** (no lugar do menu de contexto do Windows): wallpapers em miniatura, variantes, velocidade e resolução, pausar, personalizar, sair.
+- **Launcher**: personalizar cada wallpaper (variantes, resolução da grelha, escala do efeito, FPS, fonte, cores com seletor HSV, caracteres, todos os parâmetros) ao vivo; guardar como tema; criar wallpapers novos a partir de um modelo e abrir o código; definições gerais (modo estendido, interação do rato, pausas, limite de FPS, iniciar com o Windows).
+- **Resolução vs escala**: `render.scale` e coordenadas de mundo (`i.world`, `mouse.world`, `worldSize`) — mudar a resolução da grelha já não muda o tamanho do efeito.
+- **Sprites**: `render.glyphs` + `glyph(k)` no shader.
+- Ajustes do utilizador por wallpaper em `%APPDATA%\AsciiPaper\overrides\` (formato de tema).
+- `visible(c)` no prelude; `--launcher`, `--ui-screenshot`, `--flyout-screenshot`.
+- Toolkit de interface em modo imediato com Direct2D (repinta só com input), tema claro/escuro do Windows.
+
+### Alterado
+- `ripple`, `terrain` e `starfield` usam coordenadas de mundo; o `ripple` ganhou o parâmetro `speed`.
+- O log abre em modo partilhado (uma segunda instância, ex.: `--windowed`, também consegue escrever).
+
 ## [0.2.0] — 2026-11-20
 
 **Fases 2 e 3**: render ASCII a sério, wallpapers programáveis em HLSL, rato e os primeiros quatro efeitos.
@@ -43,5 +60,6 @@ Primeira versão alpha: **Fases 0 e 1** (esqueleto + integração com o desktop)
 - Modo `--windowed` para desenvolvimento.
 - Testes unitários (doctest): geometria/coordenadas do ecrã virtual, DPI, política de pausas, argumentos.
 
+[0.3.0]: ../../releases/tag/v0.3.0
 [0.2.0]: ../../releases/tag/v0.2.0
 [0.1.0]: ../../releases/tag/v0.1.0

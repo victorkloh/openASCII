@@ -2,24 +2,37 @@
 
 **Wallpapers ASCII animados e interativos para Windows 10/11**, desenhados atrás dos ícones do ambiente de trabalho. Um único `.exe` nativo e pequeno (C++20, Win32, Direct3D 11), sem browser embutido nem runtime pesado. Cada wallpaper é programável e fácil de partilhar.
 
-| ripple | matrix |
+| valley | ripple |
 |---|---|
-| ![ripple](wallpapers/ripple/preview.png) | ![matrix](wallpapers/matrix/preview.png) |
-| **terrain** | **starfield** |
-| ![terrain](wallpapers/terrain/preview.png) | ![starfield](wallpapers/starfield/preview.png) |
+| ![valley](wallpapers/valley/preview.png) | ![ripple](wallpapers/ripple/preview.png) |
+| **matrix** | **starfield** |
+| ![matrix](wallpapers/matrix/preview.png) | ![starfield](wallpapers/starfield/preview.png) |
 
-> **Estado: alpha (v0.2.0).** Fases 0–3 feitas: integração com o desktop, render ASCII, wallpapers em HLSL com hot reload, rato e quatro efeitos. Os wallpapers em Lua (fluid, particles, life, clock) chegam na Fase 4. Ver o [roadmap](#roadmap).
+> **Estado: alpha (v0.3.0).** Fases 0–3 feitas, mais o launcher e o menu da bandeja (parte da Fase 5). Os wallpapers em Lua (fluid, particles, life, clock) chegam na Fase 4. Ver o [roadmap](#roadmap).
 
 ## Efeitos incluídos
 
-| Wallpaper | Interação | Temas |
+| Wallpaper | Interação | Variantes |
 |---|---|---|
+| **valley** | mapa vivo: chuvadas, nuvens com sombra, manadas que fogem do rato, pássaros em V, peixes, aldeias que acendem à noite, ciclo dia/noite; clicar faz cair um relâmpago | `autumn`, `miniature` |
 | **ripple** | o rato deixa ondas na água; clicar atira uma pedra; chove de vez em quando | `ember`, `blocks` |
 | **matrix** | chuva de caracteres; as colunas desviam-se do cursor | `amber`, `binary` |
 | **terrain** | paisagem de ruído a deslizar devagar; o rato faz parallax entre terra e nuvens | `desert`, `topo` |
 | **starfield** | voo pelas estrelas; o rato define a direção | `warp`, `braille` |
 
-Escolhe-os na tray → **Wallpaper**. A escolha fica guardada.
+**Vários monitores = um só efeito.** Com "Estender por todos os monitores" (ligado por defeito), o wallpaper corre numa única tela que cobre todos os ecrãs, como o modo Estender do Windows: uma onda que sai de um monitor entra no outro, os animais do valley atravessam de um ecrã para o outro.
+
+## Menu da bandeja e launcher
+
+| Menu da bandeja | Launcher |
+|---|---|
+| ![menu](docs/img/flyout.png) | ![launcher](docs/img/launcher.png) |
+
+- **Menu da bandeja** (clique no ícone): escolher o wallpaper e a variante, ajustar a velocidade e a resolução da grelha, pausar, abrir o launcher, sair.
+- **Launcher** (Personalizar): para cada wallpaper, as variantes, a **resolução da grelha** (tamanho dos caracteres) e a **escala do efeito** (tamanho da paisagem/ondas, independente da resolução), FPS, fonte, cores (com seletor de cor), caracteres e todos os parâmetros próprios. As alterações aparecem ao vivo e ficam guardadas; "Guardar como tema" cria uma variante nova. Também cria wallpapers novos a partir de um modelo e abre o código no teu editor.
+- **Definições**: modo estendido, rato só no desktop ou em todo o lado, regras de pausa, limite de FPS, iniciar com o Windows.
+
+A interface segue o tema claro/escuro do Windows e usa como cor de destaque a cor do wallpaper ativo.
 
 ## O que a app faz por ti
 
@@ -36,7 +49,7 @@ Medido (Release, RTX 4060, 2 monitores 1080p a 60 fps): **0,17% de CPU**, 0,4 ms
 
 1. Transfere o `AsciiPaper-<versão>-win64.zip` da página de [Releases](../../releases) e extrai-o para uma pasta.
 2. Corre `asciipaper.exe`. O ícone aparece na área de notificação (junto ao relógio, talvez escondido na seta **^**).
-3. Clica no ícone para escolher o wallpaper, pausar ou sair. Ao sair, o teu wallpaper original volta.
+3. Clica no ícone para escolher o wallpaper, pausar, abrir o launcher ou sair. Ao sair, o teu wallpaper original volta.
 
 Não precisa de instalação nem de permissões de administrador. O Windows SmartScreen pode avisar, porque o executável ainda não está assinado.
 
@@ -48,6 +61,7 @@ Não precisa de instalação nem de permissões de administrador. O Windows Smar
 | `--wallpaper <nome ou pasta>` | Usa um wallpaper (`ripple`, uma pasta, ou um tema `.toml`) |
 | `--bench <segundos>` | Mede frame time médio/p99, CPU e RAM e sai |
 | `--screenshot <ficheiro.png>` | Renderiza 3 s fora do ecrã, grava um PNG e sai |
+| `--launcher` | Abre o launcher ao arrancar |
 | `--verbose`, `-v` | Logs detalhados, também na consola |
 | `--help`, `-h` | Ajuda |
 
@@ -55,7 +69,8 @@ Não precisa de instalação nem de permissões de administrador. O Windows Smar
 
 | Onde | O quê |
 |---|---|
-| `%APPDATA%\AsciiPaper\config.toml` | wallpaper escolhido, `interaction = "desktop_only" \| "always"`, `max_fps`, `pause_on_maximized`, `pause_on_battery_saver` |
+| `%APPDATA%\AsciiPaper\config.toml` | wallpaper escolhido, `interaction`, `max_fps`, `span_monitors`, regras de pausa (o launcher escreve-o por ti) |
+| `%APPDATA%\AsciiPaper\overrides\` | os teus ajustes por wallpaper (cores, resolução, parâmetros...), no formato de tema |
 | `%APPDATA%\AsciiPaper\wallpapers\` | os teus wallpapers (além dos que vêm ao lado do `.exe`) |
 | `%APPDATA%\AsciiPaper\log.txt` | log (roda acima de 1 MB) |
 
@@ -66,8 +81,8 @@ Uma pasta com um `wallpaper.toml` e um `main.hlsl` de poucas linhas:
 ```hlsl
 CellOut cell(CellIn i)
 {
-    float d = cellDistance(i.pos, mouse.pos);
-    float v = sin(d * 0.4 - time * 4.0 * param("speed")) * exp(-d * 0.05);
+    float d = length(i.world - mouse.world); // unidades de mundo: não dependem da resolução
+    float v = sin(d * 0.5 - time * 3.0 * param("speed")) * exp(-d * 0.03);
     CellOut o;
     o.value = v * 0.5 + 0.5;    // escolhe o caractere
     o.fg = palette(o.value);    // e a cor
@@ -78,7 +93,7 @@ CellOut cell(CellIn i)
 }
 ```
 
-Guia completo, com a API toda e temas sem código: **[docs/CREATING_WALLPAPERS.md](docs/CREATING_WALLPAPERS.md)**. Com `--windowed --wallpaper <pasta>` tens hot reload: gravas e vês.
+Guia completo, com a API toda e temas sem código: **[docs/CREATING_WALLPAPERS.md](docs/CREATING_WALLPAPERS.md)**. O mais fácil é o launcher → **Novo wallpaper**: escolhe um modelo, dá-lhe um nome e o código abre no teu editor; cada gravação aparece logo no ambiente de trabalho.
 
 ## Compilar a partir do código
 
@@ -116,7 +131,7 @@ Com CMake ≥ 3.25 e vcpkg já instalados, basta definir `VCPKG_ROOT` e usar os 
 | 2 — Render ASCII | GlyphAtlas (DirectWrite), cell buffer, `grid.hlsl`, blocos/caixa/Braille procedurais, `--bench` | ✅ · ⏳ teste a 200% |
 | 3 — Input + backend shader | Raw Input, DesktopHitTest, `prelude.hlsl`, `prev()`, params, manifest TOML, hot reload, erros no ecrã; `ripple`, `matrix`, `terrain`, `starfield` | ✅ · ⏳ teste com o rato no desktop |
 | 4 — Backend script | LuaJIT com sandbox, natives (fluid, particles, life); `fluid`, `particles`, `life`, `clock` | ⏳ |
-| 5 — App e polimento | Config completa, wallpaper por monitor, autostart, tutorial | ⏳ (parte da tray e da config já existe) |
+| 5 — App e polimento | Menu da bandeja próprio, launcher (personalizar, criar, editar), temas, autostart, efeito estendido entre monitores | 🟡 grande parte feita · falta wallpaper diferente por monitor |
 
 ## Licença
 

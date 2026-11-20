@@ -11,7 +11,7 @@ meu-wallpaper/
    └─ noite.toml
 ```
 
-Onde pôr a pasta: `%APPDATA%\AsciiPaper\wallpapers\` (a tray → **Abrir pasta de wallpapers** leva-te lá perto). Aparece logo no menu **Wallpaper** da tray.
+O caminho mais rápido: launcher → **Novo wallpaper**. Escolhe um modelo, dá um nome, e a app cria a pasta em `%APPDATA%\AsciiPaper\wallpapers\`, ativa-o e abre o `main.hlsl` no teu editor. Também podes criar a pasta à mão nesse sítio; aparece logo no launcher e no menu da bandeja.
 
 > Os wallpapers do tipo *script* (Lua) chegam na Fase 4. Por agora só há o tipo *shader*.
 
@@ -85,20 +85,31 @@ A tua função `cell()` corre **uma vez por célula, por frame**, em paralelo na
 | `o.bg` | cor de fundo da célula; alpha 0 = `background` do toml |
 | `o.state` | `float4` guardado para o próximo frame (ver `prev`) |
 
+### Células ou mundo?
+Há dois sistemas de coordenadas:
+
+- **Células** (`i.pos`, `i.id`, `mouse.pos`): bom para efeitos que SÃO feitos de caracteres (as colunas do `matrix`) e para simulações vizinho-a-vizinho com `prev()` (o `ripple`).
+- **Mundo** (`i.world`, `mouse.world`, `worldSize`): uma unidade = `scale` px lógicos (no `wallpaper.toml`). **Não depende do tamanho da célula**: se o utilizador mudar a resolução da grelha no launcher, o efeito fica do mesmo tamanho, só mais fino ou mais "pixelado". Além disso, `x` e `y` têm a mesma escala (não precisas de `cellAspect`). Usa mundo para paisagens, formas e distâncias.
+
+### Vários monitores
+No modo estendido (por defeito), `grid` e `worldSize` cobrem **todos** os monitores: o teu efeito é um só, e atravessa os ecrãs. Algumas células do canvas caem fora de qualquer monitor (o espaço entre ecrãs de tamanhos diferentes); `visible(c)` diz se uma célula se vê. Para as simulações, essas células ficam com estado 0, como uma parede.
+
 ### Globais
 | Nome | |
 |---|---|
 | `time`, `dt` | segundos desde o arranque / desde o frame anterior |
-| `grid` | `uint2` colunas, linhas |
+| `grid` | `uint2` colunas, linhas do canvas |
+| `worldSize`, `worldPerCell` | tamanho do canvas em mundo; mundo por célula |
 | `cellAspect` | largura/altura da célula (~0.5) |
-| `cellPx`, `resolution` | tamanho da célula e do ecrã em px |
-| `frameIndex`, `charsetSize`, `bgColor` | |
+| `cellPx`, `resolution` | tamanho da célula e do canvas em px |
+| `frameIndex`, `charsetSize`, `glyphCount`, `bgColor` | |
 
 ### Rato
 | Nome | |
 |---|---|
-| `mouse.pos` | posição em células (pode estar fora da grelha) |
-| `mouse.vel` | velocidade suavizada em células/s |
+| `mouse.pos`, `mouse.world` | posição em células / em mundo (pode estar fora da grelha) |
+| `mouse.vel`, `mouse.velWorld` | velocidade suavizada (células/s, mundo/s) |
+| `mouse.clickWorld` | onde foi o último clique, em mundo |
 | `mouse.inside` | o rato está sobre o ambiente de trabalho deste monitor |
 | `mouse.buttons` | `MOUSE_LEFT`, `MOUSE_RIGHT`, `MOUSE_MIDDLE` (só cliques que começaram no desktop) |
 | `mouse.clickPos`, `mouse.clickTime`, `mouse.clickButton` | último clique |
@@ -113,6 +124,8 @@ Por defeito o wallpaper só reage quando o rato está **sobre o desktop** (não 
 | `param("nome")` | valor de um parâmetro de `[params]` (um nome que não existe é um erro com a linha) |
 | `palette(t)` | cor da paleta em t ∈ [0,1], interpolada |
 | `prev(int2 c)` | o `state` que a célula `c` escreveu no frame anterior (fora da grelha = borda) |
+| `glyph(k)` | para `o.glyph`: o caractere `k` da lista `glyphs` do toml (sprites: animais, pássaros...) |
+| `visible(int2 c)` | a célula `c` está dentro de algum monitor? |
 | `cellDistance(a, b)` | distância em alturas de célula, corrigida para ficar redonda no ecrã |
 | `noise(p)`, `fbm(p)` | ruído suave em [0,1], 2D ou 3D; `fbm` soma 5 oitavas |
 | `hash11`, `hash21`, `hash22`, `hash33` | pseudo-aleatório em [0,1) |
@@ -152,7 +165,9 @@ Valores fora de `[min, max]` são limitados (com um aviso no log).
 | `render.mode` | `"shader"` \| `"script"` | `"shader"` |
 | `render.entry` | ficheiro na pasta | `main.hlsl` |
 | `render.fps` | 1–240 (limitado pelo `max_fps` global) | 30 |
-| `render.cell` | 4–128 px lógicos | 10 |
+| `render.cell` | 4–128 px lógicos: **resolução** da grelha | 10 |
+| `render.scale` | 1–400 px lógicos por unidade de mundo: **escala** do efeito | 10 |
+| `render.glyphs` | texto UTF-8 (até 256): caracteres extra para `glyph(k)` | vazio |
 | `render.font` | nome ou `.ttf/.otf` | `"Cascadia Mono"` (alternativas: Consolas, Courier New) |
 | `render.font_weight` | 100–950 | 400 |
 | `render.charset` | texto UTF-8 | `" .:-=+*#%@"` |

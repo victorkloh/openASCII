@@ -1,7 +1,7 @@
 # Arquitetura do AsciiPaper
 
 > Documento vivo: explica **porquê** o código é como é. Atualizado no fim de cada fase.
-> Estado atual: **Fases 0–3** (esqueleto, integração com o desktop, render ASCII, rato + backend shader).
+> Estado atual: **Fases 0–3** (esqueleto, integração com o desktop, render ASCII, rato + backend shader) + canvas estendido entre monitores e a interface (menu da bandeja e launcher).
 
 ## 1. Visão geral
 
@@ -175,6 +175,39 @@ O `main.hlsl` do wallpaper define só `CellOut cell(CellIn i)`. A app monta o c�
 - **Em pausa, o Raw Input é desregistado**: sem isso o sistema acordar-nos-ia a cada movimento do rato (com ratos de 1000 Hz, mil vezes por segundo).
 - **DesktopHitTest**: `WindowFromPoint` sob o cursor é `SysListView32`/`SHELLDLL_DefView`/`WorkerW`/`Progman`? Só então o rato conta (`mouse.inside`) e os cliques são aceites — clicar num browser por cima do desktop não faz ondas. Configurável com `interaction = "always"`.
 - Cada monitor recebe a posição convertida para as **suas** células (origem do monitor + margem da grelha).
+
+## 7e. Canvas estendido entre monitores (v0.3)
+
+Até à v0.2 cada monitor tinha a sua grelha e a sua simulação; com o mesmo `time`, os dois ecrãs mostravam o mesmo efeito sincronizado. Agora há uma separação entre **onde o efeito corre** e **onde é mostrado**:
+
+```
+ ecrã virtual (px)          canvas (1 cell buffer + estado prev())
+ ┌────────┬──────────┐      ┌──────────────────────────────┐
+ │ vert.  │ principal│  →   │ ███████████│███████████████  │  ← compute shader: 1 dispatch
+ │1080x   │1920x1080 │      │ ███████████│███████████████  │
+ │ 1920   ├──────────┘      │ ███████████│   (fora: parede)│
+ └────────┘                 └──────────────────────────────┘
+      ↓ cada monitor lê a sua zona do canvas (grid.hlsl) ↓
+```
+
+- `core/Canvas` (pura, testada) calcula o canvas: célula de referência = a do monitor principal; origem alinhada com a grelha dele e recuada até cobrir o *bounding box* de todos os monitores; para cada monitor, a zona de células que ele mostra.
+- O **compute shader corre uma vez por frame** sobre o canvas inteiro (não uma vez por monitor). Células fora de todos os monitores (`visible(c) == false`) ficam vazias e com estado 0: para a equação de onda é uma fronteira fixa (as ondas refletem).
+- O **grid.hlsl** de cada monitor converte "célula do monitor" → "célula do canvas" pelo **centro** da célula. Com o mesmo DPI é 1:1. Com DPIs diferentes, o monitor com células maiores salta células do canvas e a escala física mantém-se: uma onda de 10 cm continua a ter 10 cm nos dois ecrãs.
+- O atlas continua por monitor (DPI dele); os slots são iguais em todos (mesma lista de caracteres), por isso o índice guardado no canvas serve para qualquer atlas.
+- `span_monitors = false` volta ao modo "cada monitor o seu canvas". O `--windowed` tem sempre um canvas próprio.
+
+### Mundo vs células
+`render.cell` é a **resolução** (tamanho dos caracteres); `render.scale` é a **escala** (px lógicos por unidade de mundo, no DPI do monitor de referência). O prelude dá `i.world = i.pos * worldPerCell`, com `worldPerCell = cellPx / (scale × dpi/96)`. Os presets sem estado desenham em mundo, por isso mudar a resolução no launcher não muda o tamanho da paisagem — só o "grão".
+
+## 7f. Interface: menu da bandeja e launcher (v0.3)
+
+- **Direct2D + DirectWrite**, desenhado por nós, em **modo imediato** (`ui/Ui`): a cada repintura o código descreve a interface ("aqui um slider; se mexeu, aplica"), sem árvore de widgets para sincronizar com o estado. Repinta só quando há input (e mais uma vez a seguir, para refletir o resultado de um clique): parado, 0% de CPU.
+- `ui/UiWindow`: render target por janela, DPI por monitor (`WM_DPICHANGED` nas janelas de topo), rato/teclado, tema claro/escuro do Windows (`AppsUseLightTheme`), barra de título da cor do fundo (`DWMWA_CAPTION_COLOR`).
+- **Menu da bandeja** (`ui/TrayFlyout`): janela `WS_POPUP` com cantos redondos do DWM e sombra do sistema, posicionada junto ao ícone (`Shell_NotifyIconGetRect`), fecha ao perder o foco. Um clique no ícone que acabou de o fechar não o reabre (janela de 300 ms).
+- **Launcher** (`ui/Launcher`): fechar só esconde. A UI fala com a app por `ui/AppControl` (catálogo, inspecionar, ajustes, criar, abrir no editor, definições); não conhece D3D nem monitores.
+- **Ajustes ao vivo**: os ajustes do utilizador são um `Theme` sem `base` (`%APPDATA%\AsciiPaper\overrides\<wallpaper>.toml`). Mudar cores ou parâmetros só muda constantes (instantâneo); mudar fonte, resolução ou caracteres reconstrói o atlas; nada disto recompila o shader. Grava no disco ao largar o slider.
+- **Design**: superfícies neutras escuras (`#0f1115`/`#161920`/`#1e222b`), texto com contraste ≥ 4,5:1, Segoe UI Variable nos controlos e Cascadia Mono nos valores e nos títulos de secção (`// grelha`), controlos com ≥ 28 px. A cor de destaque é **a do wallpaper ativo** (a mais viva da paleta, ajustada para contraste): a interface "veste" o wallpaper.
+- `--ui-screenshot` / `--flyout-screenshot` desenham a interface num PNG (render target WIC), para documentação e testes visuais sem janelas.
 
 ## 8. Pausas (pausar = 0% de CPU)
 

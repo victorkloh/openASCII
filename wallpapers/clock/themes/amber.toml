@@ -1,0 +1,7 @@
+# Relógio âmbar de fósforo, 12 horas.
+base = "clock"
+palette = ["#0a0602", "#1c1206", "#6b3f0a", "#ffad33", "#fff0d1"]
+background = "#0a0602"
+
+[params]
+h24 = 0.0

@@ -1,0 +1,27 @@
+[meta]
+name = "Aquarium"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Um aquário ASCII: peixes, bolhas, algas e areia. Os peixes fogem do rato; clicar deixa cair comida."
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 13
+scale = 10
+font = "Cascadia Mono"
+charset = " .:-~=+*#%@"
+#  0 <  1 >  2 (  3 )  4 °  5 o  6 O  7 .  8 ~  9 '  10 /  11 \  12 ▄  13 ·  14 ¸
+glyphs = "<>()°oO.~'/\\▄·¸"
+
+[colors]
+background = "#010812"
+# fundo -> azul -> turquesa -> areia -> coral -> amarelo
+palette = ["#010812", "#06325a", "#1a8fb3", "#d8c08a", "#ff7a59", "#ffd166"]
+
+[params]
+fish    = { default = 1.0, min = 0.2, max = 2.0 }  # quantidade de peixes
+speed   = { default = 1.0, min = 0.2, max = 3.0 }
+bubbles = { default = 1.0, min = 0.0, max = 3.0 }
+weed    = { default = 1.0, min = 0.0, max = 2.0 }  # algas

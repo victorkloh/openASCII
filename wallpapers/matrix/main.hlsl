@@ -20,7 +20,7 @@ CellOut cell(CellIn i)
     float2 d = i.pos - mouse.pos;
     float dist = cellDistance(i.pos, mouse.pos);
     float r = param("radius");
-    float push = (mouse.inside && r > 0.0) ? r * 0.9 * exp(-(dist * dist) / (r * r)) : 0.0;
+    float push = r > 0.0 ? r * 0.9 * exp(-(dist * dist) / (r * r)) * mouse.presence : 0.0;
     float sourceX = i.pos.x - sign(d.x) * push / cellAspect;
     float column = floor(sourceX);
     float row = i.pos.y;
@@ -31,7 +31,7 @@ CellOut cell(CellIn i)
     float v = max(a, b) * on;
 
     // Uma bolha vazia mesmo à volta do cursor.
-    if (mouse.inside && r > 0.0) v *= smoothstep(r * 0.25, r * 0.45, dist);
+    if (r > 0.0) v *= lerp(1.0, smoothstep(r * 0.25, r * 0.45, dist), mouse.presence);
 
     CellOut o;
     o.bg = float4(0, 0, 0, 0);

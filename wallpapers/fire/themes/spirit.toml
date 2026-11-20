@@ -1,0 +1,9 @@
+# Fogo-fátuo azul, chamas mais baixas e finas.
+base = "fire"
+cell = 9
+palette = ["#010208", "#06134a", "#0f3fb0", "#2a8cff", "#7fd1ff", "#e6fbff", "#ffffff"]
+background = "#010208"
+
+[params]
+height = 0.3
+embers = 1.6

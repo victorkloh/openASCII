@@ -12,7 +12,7 @@ CellOut cell(CellIn i)
 
     // O parallax segue o rato suavemente: cada célula guarda a mesma posição suavizada
     // no state (todas calculam o mesmo valor), assim não há saltos quando o rato entra/sai.
-    float2 target = mouse.inside ? (mouse.world / worldSize - 0.5) : float2(0, 0);
+    float2 target = (mouse.world / worldSize - 0.5) * mouse.presence; // volta à origem quando o rato sai
     float2 smoothed = prev(int2(i.id)).xy;
     smoothed = lerp(smoothed, target, 1.0 - exp(-dt * 2.5));
     float2 par = smoothed * param("parallax");

@@ -1,0 +1,6 @@
+# Aurora vermelha (as raras, de tempestade solar forte).
+base = "aurora"
+palette = ["#05010a", "#1a0620", "#ff3b5c", "#ff9a5c", "#c23bff", "#ffd0f0"]
+
+[params]
+intensity = 1.3

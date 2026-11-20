@@ -1,0 +1,8 @@
+# Fundo do mar: escuro, peixes bioluminescentes, menos algas.
+base = "aquarium"
+palette = ["#000204", "#020c1c", "#0a2f4a", "#3a3a4a", "#00ffc8", "#d36bff"]
+background = "#000204"
+
+[params]
+weed = 0.3
+fish = 0.8

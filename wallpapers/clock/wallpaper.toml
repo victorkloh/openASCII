@@ -1,0 +1,26 @@
+[meta]
+name = "Clock"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Um relógio grande em blocos, com a data e os segundos, sobre um fundo calmo. O rato faz brilhar os dígitos."
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 20
+cell = 12
+scale = 10
+font = "Cascadia Mono"
+charset = " .·:-=+*"
+# 0-9 dígitos, 10 espaço, 11.. letras para os dias e meses em português, depois símbolos
+glyphs = "0123456789 ABDEFGIJLMNOQRSTUVXZ·█░━─"
+
+[colors]
+background = "#06070c"
+palette = ["#06070c", "#11162a", "#3b4a8a", "#8fb8ff", "#e9f1ff"]
+
+[params]
+size    = { default = 0.26, min = 0.1, max = 0.6 } # altura dos dígitos (fração do ecrã principal)
+h24     = { default = 1.0,  min = 0.0, max = 1.0 } # 1 = 24 horas, 0 = 12 horas
+seconds = { default = 1.0,  min = 0.0, max = 1.0 } # mostrar a barra dos segundos
+dust    = { default = 1.0,  min = 0.0, max = 3.0 } # partículas a flutuar no fundo

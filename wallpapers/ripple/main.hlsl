@@ -28,11 +28,11 @@ CellOut cell(CellIn i)
     h *= param("damping");
 
     // O rato a mexer-se perturba a água à sua volta, proporcionalmente à velocidade.
-    if (mouse.inside)
+    if (mouse.presence > 0.001)
     {
         float d = length(i.world - mouse.world);
         float speed = min(length(mouse.velWorld) * 0.0035, 1.0);
-        h += exp(-d * d * 0.24) * speed * 0.6 * param("strength");
+        h += exp(-d * d * 0.24) * speed * 0.6 * param("strength") * mouse.presence;
     }
 
     // Clique: uma pedrada forte (só no frame do clique).

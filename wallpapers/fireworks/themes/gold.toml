@@ -1,0 +1,7 @@
+# Ano novo dourado: explosões grandes e só tons de ouro e branco.
+base = "fireworks"
+palette = ["#020203", "#b8860b", "#ffd700", "#fff1b8", "#ffc14d", "#ffffff"]
+
+[params]
+size = 1.4
+rate = 1.3

@@ -1,0 +1,27 @@
+[meta]
+name = "Synthwave"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Pôr do sol retro: sol listrado, montanhas néon e uma grelha infinita. O rato move a câmara."
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 12
+scale = 10
+font = "Cascadia Mono"
+charset = " .:-=+*#%@"
+# 0 ─  1 │  2 /  3 \  4 ·  5 *  6 ▀ (riscas do sol)
+glyphs = "─│/\\·*▀"
+
+[colors]
+background = "#07021a"
+# céu da noite -> roxo -> magenta -> laranja -> amarelo do sol
+palette = ["#07021a", "#2a0b4f", "#7a1a8c", "#e8327c", "#ff8a3d", "#ffe36e"]
+
+[params]
+speed    = { default = 1.0, min = 0.0, max = 4.0 }  # velocidade da grelha
+horizon  = { default = 0.56, min = 0.3, max = 0.8 } # altura do horizonte (fração do ecrã principal)
+parallax = { default = 1.0, min = 0.0, max = 3.0 }
+stars    = { default = 1.0, min = 0.0, max = 2.0 }

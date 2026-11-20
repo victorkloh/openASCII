@@ -1,0 +1,25 @@
+[meta]
+name = "Donut"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "O donut 3D a girar, em homenagem ao clássico do terminal. O rato inclina-o; clicar dá-lhe um empurrão."
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 12
+scale = 10
+font = "Cascadia Mono"
+charset = " .,-~:;=!*#$@"
+glyphs = "'`.,"   # granulado (no tema "sprinkles")
+
+[colors]
+background = "#050508"
+palette = ["#050508", "#3a2a1a", "#a8743c", "#f2c58a", "#fff3e0"]
+
+[params]
+speed     = { default = 1.0, min = 0.0, max = 4.0 }
+size      = { default = 0.62, min = 0.15, max = 1.2 } # tamanho (fração da altura do ecrã principal)
+thickness = { default = 0.45, min = 0.2, max = 0.8 }  # espessura do anel
+sprinkles = { default = 0.0, min = 0.0, max = 1.0 }   # granulado colorido

@@ -7,7 +7,7 @@ CellOut cell(CellIn i)
     float4 st = prev(c);
 
     // Ponto de fuga suavizado (guardado em state.zw; todas as células calculam o mesmo).
-    float2 target = mouse.inside ? mouse.world : worldSize * 0.5;
+    float2 target = lerp(worldSize * 0.5, mouse.world, mouse.presence);
     float2 center = (frameIndex == 0u) ? target : st.zw;
     center = lerp(center, target, 1.0 - exp(-dt * 1.8));
 

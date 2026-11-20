@@ -1,0 +1,25 @@
+[meta]
+name = "Fire"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Fogo ASCII que sobe do fundo de cada ecrã. O rato acende chamas; clicar faz uma explosão."
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 12
+scale = 10
+font = "Cascadia Mono"
+charset = " .,:;*oxsS#$@"
+glyphs = "'`*."   # faíscas
+
+[colors]
+background = "#050102"
+palette = ["#050102", "#3a0504", "#9c1b06", "#e5530b", "#ffa91f", "#ffe9a8", "#ffffff"]
+
+[params]
+height  = { default = 0.42, min = 0.1, max = 1.0 }  # altura das chamas (fração do ecrã)
+wind    = { default = 0.0,  min = -1.0, max = 1.0 } # vento para os lados
+embers  = { default = 1.0,  min = 0.0, max = 3.0 }  # faíscas a subir
+mouse   = { default = 1.0,  min = 0.0, max = 3.0 }  # quanto fogo o rato acende

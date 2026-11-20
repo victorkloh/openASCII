@@ -1,0 +1,8 @@
+# Vaporwave: céu pastel e grelha mais lenta.
+base = "synthwave"
+palette = ["#1a0f3a", "#3f2b7a", "#8a5cc8", "#ff71ce", "#01cdfe", "#fffb96"]
+background = "#1a0f3a"
+
+[params]
+speed = 0.5
+stars = 0.5

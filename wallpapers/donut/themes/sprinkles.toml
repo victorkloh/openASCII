@@ -1,0 +1,6 @@
+# Donut com cobertura rosa e granulado colorido.
+base = "donut"
+palette = ["#08050a", "#5a2a48", "#d45d9b", "#ffb3d6", "#fff0f7"]
+
+[params]
+sprinkles = 1.0

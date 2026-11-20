@@ -19,7 +19,7 @@ bool sameCell(float2 world, int2 id) { return all(int2(floor(world / worldPerCel
 CellOut cell(CellIn i)
 {
     // ---- Parallax suavizado (todas as células calculam e guardam o mesmo valor) ----
-    float2 target = mouse.inside ? (mouse.world / worldSize - 0.5) : float2(0, 0);
+    float2 target = (mouse.world / worldSize - 0.5) * mouse.presence; // volta à origem quando o rato sai
     float2 smoothed = prev(int2(i.id)).xy;
     smoothed = lerp(smoothed, target, 1.0 - exp(-dt * 2.5));
     float2 par = smoothed * param("parallax");
@@ -81,10 +81,14 @@ CellOut cell(CellIn i)
     {
         float2 dir = normalize(hash22(float2(f, 4.2)) - 0.5);
         float2 fp = wrap(hash22(float2(f, 1.3)) * world + dir * time * (1.5 + hash11(f) * 2.0), world);
-        if (heightAt(toQ(fp, par, drift)) < WATER - 0.04 && sameCell(fp, int2(i.id)))
+        // (O HLSL avalia os dois lados de um &&: testar a célula primeiro poupa o fbm.)
+        if (sameCell(fp, int2(i.id)))
         {
-            sprite = glyph(dir.x < 0 ? 4 : 5);
-            color = float4(0.75, 0.88, 1.0, 1);
+            if (heightAt(toQ(fp, par, drift)) < WATER - 0.04)
+            {
+                sprite = glyph(dir.x < 0 ? 4 : 5);
+                color = float4(0.75, 0.88, 1.0, 1);
+            }
         }
     }
 
@@ -99,17 +103,19 @@ CellOut cell(CellIn i)
         [loop] for (int j = 0; j < 4; j++)
         {
             float2 a = center + (hash22(float2(k * 7 + j, 3.3)) - 0.5) * 7.0;
-            if (mouse.inside)
             {
                 float2 away = a - mouse.world;
                 float d = length(away);
-                if (d < 14.0) a += normalize(away + 0.001) * (14.0 - d) * 0.9;
+                if (d < 14.0) a += normalize(away + 0.001) * (14.0 - d) * 0.9 * mouse.presence;
             }
-            float ah = heightAt(toQ(a, par, drift));
-            if (ah > WATER + 0.02 && ah < 0.75 && sameCell(a, int2(i.id)))
+            if (sameCell(a, int2(i.id)))
             {
-                sprite = glyph((uint(floor(time * 3.0 + j)) & 1u) ? 2 : 3);
-                color = lerp(float4(0.5, 0.45, 0.4, 1), float4(0.93, 0.86, 0.74, 1), day);
+                float ah = heightAt(toQ(a, par, drift));
+                if (ah > WATER + 0.02 && ah < 0.75)
+                {
+                    sprite = glyph((uint(floor(time * 3.0 + j)) & 1u) ? 2 : 3);
+                    color = lerp(float4(0.5, 0.45, 0.4, 1), float4(0.93, 0.86, 0.74, 1), day);
+                }
             }
         }
     }

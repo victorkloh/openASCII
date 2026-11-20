@@ -1,0 +1,26 @@
+[meta]
+name = "Fireworks"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Fogo de artifício sobre a cidade, com rastos e brilho no céu. Clica para lançar o teu."
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 40
+cell = 11
+scale = 10
+font = "Cascadia Mono"
+charset = " .,:;+*"
+# 0 * 1 + 2 · 3 | (foguete) 4 ▀ 5 █ (prédios) 6 ▪ (janela)
+glyphs = "*+·|▀█▪"
+
+[colors]
+background = "#02030a"
+palette = ["#02030a", "#ff4d6d", "#ffd166", "#06d6a0", "#4cc9f0", "#c77dff"]
+
+[params]
+rate     = { default = 1.0, min = 0.2, max = 3.0 }  # foguetes por segundo (aprox.)
+size     = { default = 1.0, min = 0.4, max = 2.0 }  # tamanho das explosões
+trails   = { default = 0.86, min = 0.0, max = 0.95 }
+city     = { default = 1.0, min = 0.0, max = 1.0 }  # 0 = sem cidade

@@ -1,0 +1,27 @@
+[meta]
+name = "Rain"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Noite de chuva vista de uma janela embaciada, com a cidade desfocada lá fora. Arrasta o rato para desenhar no vidro."
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 11
+scale = 10
+font = "Cascadia Mono"
+charset = " .·:•oO@"
+# 0 o gota grande   1 ° gota pequena   2 | rasto de gota   3 . gotícula   4 ' gota
+glyphs = "o°|.'"
+
+[colors]
+background = "#04050a"
+# noite -> néon azul -> magenta -> âmbar -> branco quente
+palette = ["#04050a", "#1b2a52", "#3f7fd9", "#d94f9c", "#ffb05c", "#fff3dc"]
+
+[params]
+rain    = { default = 1.0, min = 0.0, max = 3.0 } # gotas a escorrer
+fog     = { default = 0.7, min = 0.0, max = 1.0 } # quão embaciado fica o vidro
+regrow  = { default = 1.0, min = 0.0, max = 4.0 } # rapidez com que volta a embaciar
+lights  = { default = 1.0, min = 0.2, max = 2.0 } # luzes da cidade

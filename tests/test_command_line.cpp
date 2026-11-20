@@ -34,6 +34,14 @@ TEST_CASE("opções com valor") {
     CHECK(r.options.benchSeconds == 10);
 }
 
+TEST_CASE("--screenshot implica --windowed") {
+    const auto r = parse({L"--screenshot", L"out.png"});
+    CHECK(r.error.empty());
+    CHECK(r.options.screenshot == L"out.png");
+    CHECK(r.options.windowed);
+    CHECK_FALSE(parse({L"--screenshot"}).error.empty());
+}
+
 TEST_CASE("erros") {
     CHECK_FALSE(parse({L"--bench"}).error.empty());
     CHECK_FALSE(parse({L"--bench", L"abc"}).error.empty());

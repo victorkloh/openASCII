@@ -13,6 +13,7 @@ struct Options {
     bool showHelp = false;  // --help / -h
     std::wstring wallpaper; // --wallpaper <pasta>   (Fase 3)
     int benchSeconds = 0;   // --bench <segundos>    (Fase 2)
+    std::wstring screenshot; // --screenshot <ficheiro.png>: renderiza fora do ecrã, grava e sai
 };
 
 struct ParseResult {

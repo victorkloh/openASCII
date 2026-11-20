@@ -48,6 +48,11 @@ ParseResult parseCommandLine(std::span<const std::wstring_view> args) {
             const auto* v = needValue(a);
             if (!v) return result;
             o.wallpaper = std::wstring(*v);
+        } else if (a == L"--screenshot") {
+            const auto* v = needValue(a);
+            if (!v) return result;
+            o.screenshot = std::wstring(*v);
+            o.windowed = true; // renderiza numa janela escondida, nunca no desktop
         } else if (a == L"--bench") {
             const auto* v = needValue(a);
             if (!v) return result;
@@ -67,7 +72,8 @@ const wchar_t* usageText() {
     return L"Uso: asciipaper [opções]\n"
            L"  --windowed            renderiza numa janela normal (desenvolvimento)\n"
            L"  --wallpaper <pasta>   carrega um wallpaper específico (Fase 3)\n"
-           L"  --bench <segundos>    mede frame time, CPU e RAM (Fase 2)\n"
+           L"  --bench <segundos>    mede frame time, CPU e RAM\n"
+           L"  --screenshot <png>    renderiza 3 s fora do ecrã (1280x720), grava um PNG e sai\n"
            L"  --verbose, -v         logs detalhados, também na consola\n"
            L"  --help, -h            mostra esta ajuda\n";
 }

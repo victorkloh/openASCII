@@ -1,12 +1,15 @@
 #pragma once
-// Rato global, sem foco: Raw Input com RIDEV_INPUTSINK numa janela message-only.
+// Rato global, sem foco e SEM mensagens: lido uma vez por frame (posição + botões).
 //
-// Porquê Raw Input e não um hook WH_MOUSE_LL? Um hook de baixo nível põe o nosso processo
-// no caminho de CADA evento do rato do sistema inteiro: se demorarmos, o cursor de toda a
-// gente fica lento, e o Windows remove hooks que demoram demais. O Raw Input é só uma
-// cópia dos eventos entregue na nossa fila: não atrasa ninguém.
+// Porquê não Raw Input? Medido na v0.3: com RIDEV_INPUTSINK o Windows entrega uma mensagem
+// WM_INPUT por cada movimento do rato no sistema inteiro (centenas a milhares por segundo),
+// mesmo com o cursor sobre outras janelas. E como as nossas janelas são filhas de uma janela
+// do Explorer, a nossa fila de input está ligada à dele: essas mensagens misturam-se com o
+// input do ambiente de trabalho. Resultado: o fundo perdia FPS ao mexer o rato.
 //
-// A posição absoluta vem de GetCursorPos (o Raw Input dá movimentos relativos).
+// Ler o estado uma vez por frame dá a mesma informação para um wallpaper (posição, botões,
+// cliques) com zero mensagens, e só quando há algo a desenhar. E nunca um hook WH_MOUSE_LL,
+// que poria o nosso processo no caminho de cada evento do rato de toda a gente.
 
 #include <windows.h>
 
@@ -25,23 +28,16 @@ enum MouseButton : unsigned {
 
 class MouseInput {
 public:
-    ~MouseInput();
-
-    bool create(HINSTANCE instance);
-    // Registar/desregistar o Raw Input. Em pausa desligamos: o sistema deixa de nos
-    // acordar a cada movimento do rato (0% de CPU a sério).
-    void setEnabled(bool enabled);
-
     // Chamar no início de cada frame.
     void update();
 
     InteractionMode mode = InteractionMode::DesktopOnly;
     HWND windowedTarget = nullptr; // em --windowed, a "área de desktop" é esta janela
 
-    POINT cursor{};          // ecrã virtual, px físicos
+    POINT cursor{};           // ecrã virtual, px físicos
     bool overDesktop = false; // o cursor está sobre o desktop (ou mode == Always)
     unsigned buttons = 0;     // botões premidos cujo clique começou no desktop
-    float scroll = 0.0f;      // entalhes desde o último update(), + = para cima
+    float scroll = 0.0f;      // reservado (sempre 0: a roda não se consegue ler sem mensagens)
 
     // Último clique que começou no desktop.
     POINT clickPos{};
@@ -49,13 +45,8 @@ public:
     LONGLONG clickQpc = 0; // 0 = nunca
 
 private:
-    static LRESULT CALLBACK wndProc(HWND, UINT, WPARAM, LPARAM);
-    void onRawInput(HRAWINPUT handle);
     bool acceptsAt(POINT pt) const;
-
-    HWND hwnd_ = nullptr;
-    bool enabled_ = false;
-    float pendingScroll_ = 0.0f;
+    bool wasDown_[3] = {};
 };
 
 } // namespace ap::input

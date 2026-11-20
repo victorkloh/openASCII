@@ -77,8 +77,9 @@ void init(bool verbose, bool console) {
     if (std::filesystem::exists(logPath, ec) && std::filesystem::file_size(logPath, ec) > kMaxLogBytes) {
         std::filesystem::rename(logPath, s.folder + L"\\log.1.txt", ec);
     }
-    // "N" = não herdável por processos-filho. Partilhado para leitura (podes abri-lo enquanto corre).
-    s.file = _wfsopen(logPath.c_str(), L"abN", _SH_DENYWR);
+    // "N" = não herdável por processos-filho. Partilhado (_SH_DENYNO): podes abri-lo enquanto
+    // corre, e uma segunda instância (ex.: --windowed ao lado do wallpaper) também escreve.
+    s.file = _wfsopen(logPath.c_str(), L"abN", _SH_DENYNO);
 
     if (console && AttachConsole(ATTACH_PARENT_PROCESS)) {
         s.console = GetStdHandle(STD_ERROR_HANDLE);

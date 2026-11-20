@@ -1,21 +1,30 @@
 #include "app/App.h"
 
+#include "core/Canvas.h"
+#include "core/Utf8.h"
 #include "desktop/MonitorManager.h"
 #include "desktop/Wallpaper.h"
 #include "render/Screenshot.h"
 #include "resource.h"
+#include "ui/Gfx.h"
+#include "ui/Launcher.h"
+#include "ui/TrayFlyout.h"
 #include "util/Log.h"
 #include "util/Win32.h"
 #include "version.h"
 
 #include <dbt.h>
+#include <dwrite_2.h>
 #include <psapi.h>
 #include <shellapi.h>
 #include <wtsapi32.h>
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <numeric>
+#include <regex>
+#include <set>
 #include <sstream>
 
 namespace ap::app {
@@ -25,6 +34,7 @@ namespace fs = std::filesystem;
 namespace {
 
 constexpr wchar_t kControllerClass[] = L"AsciiPaperController";
+constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 constexpr UINT WM_APP_TRAY = WM_APP + 10;
 constexpr UINT WM_APP_LOAD_DONE = WM_APP + 11; // terminou a compilação em segundo plano
 
@@ -50,6 +60,7 @@ LONGLONG qpcNow() {
 }
 
 std::wstring widen(std::string_view s) { return wallpaper::toWide(s); }
+std::string narrow(std::wstring_view s) { return win::toUtf8(s); }
 
 void toFloat4(Rgba8 c, float out[4]) {
     out[0] = c.r / 255.0f;
@@ -64,6 +75,78 @@ ULONGLONG processCpu100ns() {
     auto toU = [](FILETIME f) { return (static_cast<ULONGLONG>(f.dwHighDateTime) << 32) | f.dwLowDateTime; };
     return toU(kernel) + toU(user);
 }
+
+bool samePath(const fs::path& a, const fs::path& b) {
+    std::error_code ec;
+    return !a.empty() && !b.empty() && fs::equivalent(a, b, ec);
+}
+
+bool autostartEnabled() {
+    wchar_t buf[MAX_PATH * 2] = {};
+    DWORD size = sizeof(buf);
+    return RegGetValueW(HKEY_CURRENT_USER, kRunKey, L"AsciiPaper", RRF_RT_REG_SZ, nullptr, buf, &size) ==
+           ERROR_SUCCESS;
+}
+
+void setAutostart(bool on) {
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kRunKey, 0, KEY_SET_VALUE, &key) != ERROR_SUCCESS) return;
+    if (on) {
+        wchar_t exe[MAX_PATH * 2] = {};
+        GetModuleFileNameW(nullptr, exe, static_cast<DWORD>(std::size(exe)));
+        const std::wstring cmd = L"\"" + std::wstring(exe) + L"\"";
+        RegSetValueExW(key, L"AsciiPaper", 0, REG_SZ, reinterpret_cast<const BYTE*>(cmd.c_str()),
+                       static_cast<DWORD>((cmd.size() + 1) * sizeof(wchar_t)));
+    } else {
+        RegDeleteValueW(key, L"AsciiPaper");
+    }
+    RegCloseKey(key);
+}
+
+// Modelo para "Novo wallpaper" em branco.
+constexpr const char* kTemplateToml = R"toml([meta]
+name = "{NAME}"
+author = ""
+version = "1.0.0"
+description = "O meu wallpaper"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 12
+scale = 10
+font = "Cascadia Mono"
+charset = " .:-=+*#%@"
+
+[colors]
+background = "#05070d"
+palette = ["#05070d", "#1e3a8a", "#38bdf8", "#e0f2fe"]
+
+[params]
+speed = { default = 1.0, min = 0.0, max = 4.0 }
+)toml";
+
+constexpr const char* kTemplateHlsl = R"hlsl(// O meu wallpaper. Grava este ficheiro e o AsciiPaper recarrega-o sozinho.
+// Guia: docs/CREATING_WALLPAPERS.md
+
+CellOut cell(CellIn i)
+{
+    // i.world e mouse.world estão em unidades de mundo: mudar a resolução da grelha
+    // não muda o tamanho do efeito.
+    float2 center = mouse.inside ? mouse.world : worldSize * 0.5;
+    float d = length(i.world - center);
+    float v = sin(d * 0.5 - time * 3.0 * param("speed")) * exp(-d * 0.03);
+
+    CellOut o;
+    o.value = v * 0.5 + 0.5;
+    o.fg = palette(o.value);
+    o.bg = float4(0, 0, 0, 0);
+    o.state = float4(0, 0, 0, 0);
+    o.glyph = 0;
+    return o;
+}
+)hlsl";
 
 } // namespace
 
@@ -131,10 +214,34 @@ bool App::init() {
     }
     mouse_.create(instance_);
 
+    // A interface (menu da bandeja, launcher) é desenhada com Direct2D, sob pedido.
+    gfx_ = std::make_unique<ui::Gfx>();
+    if (FAILED(gfx_->init())) {
+        log::warn(L"Direct2D indisponível: sem menu próprio nem launcher");
+        gfx_.reset();
+    } else {
+        flyout_ = std::make_unique<ui::TrayFlyout>(*gfx_, *this);
+        launcher_ = std::make_unique<ui::Launcher>(*gfx_, *this);
+        flyout_->create(instance_);
+        launcher_->create(instance_);
+    }
+
     // O wallpaper é carregado e compilado ANTES de criar as janelas: assim o primeiro
     // frame já é o wallpaper a sério (sem flash preto nem cor provisória).
     wallpaper::loadShaderLibrary();
     loadWallpaperSync(initialWallpaperPath());
+
+    // Modos que só desenham a interface num PNG e saem.
+    if (!options_.uiScreenshot.empty() || !options_.flyoutScreenshot.empty()) {
+        HRESULT hr = E_FAIL;
+        if (gfx_ && !options_.uiScreenshot.empty()) {
+            hr = launcher_->renderToPng(options_.uiScreenshot, options_.uiPage);
+        }
+        if (gfx_ && !options_.flyoutScreenshot.empty()) hr = flyout_->renderToPng(options_.flyoutScreenshot);
+        log::info(L"Screenshot da interface: {}", SUCCEEDED(hr) ? L"ok" : win::hrToString(hr));
+        PostQuitMessage(SUCCEEDED(hr) ? 0 : 1);
+        return true;
+    }
 
     if (options_.benchSeconds > 0) {
         benchmarking_ = true;
@@ -146,7 +253,9 @@ bool App::init() {
     }
 
     if (options_.windowed) {
-        return createWindowedSurface();
+        const bool ok = createWindowedSurface();
+        if (ok && options_.openLauncher) openLauncher();
+        return ok;
     }
 
     // ---- Modo wallpaper ----
@@ -184,6 +293,7 @@ bool App::init() {
         log::warn(L"Desktop ainda não está pronto; a tentar de novo");
         scheduleReattach(1000);
     }
+    if (options_.openLauncher) openLauncher();
     return true;
 }
 
@@ -196,6 +306,9 @@ void App::shutdown() {
     mouse_.setEnabled(false);
     watcher_.stop();
     if (pendingLoad_.valid()) pendingLoad_.wait();
+    launcher_.reset();
+    flyout_.reset();
+    gfx_.reset();
     winEventHooks_.clear();
     batterySaverNotify_.reset();
     if (sessionNotify_) {
@@ -204,6 +317,7 @@ void App::shutdown() {
     }
     tray_.remove();
     destroySurfaces();
+    canvases_.clear();
     program_.releaseDeviceObjects();
     pipeline_.reset();
     device_.reset();
@@ -329,7 +443,7 @@ bool App::anyActive() const {
 }
 
 // ---------------------------------------------------------------------------
-// Wallpaper: carregar, compilar, hot reload
+// Wallpaper: carregar, compilar, hot reload, ajustes
 // ---------------------------------------------------------------------------
 
 fs::path App::initialWallpaperPath() const {
@@ -351,8 +465,11 @@ App::LoadJob App::runLoadJob(fs::path path) {
     job.path = std::move(path);
     job.load = wallpaper::loadWallpaper(job.path);
     if (job.load.error.empty()) {
-        job.shader = wallpaper::compileWallpaperShader(job.load.wallpaper.manifest, job.load.wallpaper.source,
-                                                       job.load.wallpaper.manifest.entry);
+        // Os ajustes do utilizador (cores, resolução, params...) vão por cima do tema.
+        auto& w = job.load.wallpaper;
+        const Theme overrides = wallpaper::loadOverrides(wallpaper::wallpaperKey(job.path));
+        for (auto& warning : applyTheme(w.manifest, overrides)) w.warnings.push_back(warning);
+        job.shader = wallpaper::compileWallpaperShader(w.manifest, w.source, w.manifest.entry);
     }
     return job;
 }
@@ -381,7 +498,7 @@ void App::loadWallpaperAsync(const fs::path& path) {
 }
 
 void App::applyLoadJob(LoadJob job) {
-    wallpaperPath_ = job.path;
+    wallpaperPath_ = job.path; // o pedido; o hot reload vigia este, mesmo que tenha falhado
     const auto& load = job.load;
     std::string error;
     if (!load.error.empty()) {
@@ -398,22 +515,20 @@ void App::applyLoadJob(LoadJob job) {
             // Nunca houve um estado bom: usar pelo menos as cores/fonte deste manifest.
             wallpaper_ = load.wallpaper;
             hasWallpaper_ = true;
+            wallpaperPath_ = job.path;
         }
+    } else if (FAILED(program_.create(device_.device(), job.shader.blob.Get()))) {
+        errorText_ = "CreateComputeShader falhou (ver log)";
     } else {
-        if (FAILED(program_.create(device_.device(), job.shader.blob.Get()))) {
-            errorText_ = "CreateComputeShader falhou (ver log)";
-        } else {
-            if (!job.shader.errors.empty()) {
-                log::debug(L"Avisos do compilador: {}", widen(job.shader.errors));
-            }
-            wallpaper_ = load.wallpaper;
-            hasWallpaper_ = true;
-            errorText_.clear();
-            settings_.fps = wallpaper_.manifest.fps;
-            for (const auto& w : wallpaper_.warnings) log::warn(L"{}: {}", widen(wallpaper_.label), widen(w));
-            log::info(L"Wallpaper ativo: {} ({} fps, célula {} px lógicos, fonte \"{}\")", widen(wallpaper_.label),
-                      wallpaper_.manifest.fps, wallpaper_.manifest.cell, widen(wallpaper_.manifest.font));
-        }
+        if (!job.shader.errors.empty()) log::debug(L"Avisos do compilador: {}", widen(job.shader.errors));
+        wallpaper_ = load.wallpaper;
+        hasWallpaper_ = true;
+        wallpaperPath_ = job.path;
+        errorText_.clear();
+        for (const auto& w : wallpaper_.warnings) log::warn(L"{}: {}", widen(wallpaper_.label), widen(w));
+        log::info(L"Wallpaper ativo: {} ({} fps, célula {} px, escala {}, fonte \"{}\")", widen(wallpaper_.label),
+                  wallpaper_.manifest.fps, wallpaper_.manifest.cell, wallpaper_.manifest.scale,
+                  widen(wallpaper_.manifest.font));
     }
 
     // Hot reload: vigiar a pasta do wallpaper (mesmo com erro, para apanhar a correção).
@@ -422,30 +537,262 @@ void App::applyLoadJob(LoadJob job) {
                                                            : wallpaper_.watchDir;
     if (!watch.empty()) watcher_.start(watch);
 
+    onManifestChanged();
+    if (flyout_) flyout_->refresh();
+    if (launcher_) launcher_->refresh();
+}
+
+void App::onManifestChanged() {
+    if (!hasWallpaper_) return;
+    settings_.fps = wallpaper_.manifest.fps;
     prepareAllSurfaces();
-    for (auto& s : surfaces_) {
-        if (s->hasSwapChain()) renderSurfaceNow(*s);
-    }
+    rebuildCanvases();
+    renderAllNow();
     if (controller_ && !surfaces_.empty()) updatePause(); // o fps pode ter mudado
 }
 
-void App::selectWallpaper(size_t index) {
-    if (index >= catalog_.size()) return;
-    const fs::path& p = catalog_[index].path;
-    // Guardar na config de forma portável: relativo à pasta de wallpapers, se possível.
-    std::string stored = wallpaper::toUtf8Path(p);
-    for (const fs::path& root : wallpaper::wallpaperRoots()) {
-        std::error_code ec;
-        const fs::path rel = fs::relative(p, root, ec);
-        if (!ec && !rel.empty() && rel.native().rfind(L"..", 0) != 0) {
-            stored = wallpaper::toUtf8Path(rel.generic_wstring());
-            break;
+void App::activate(const fs::path& path) {
+    config_.wallpaper = wallpaper::wallpaperKey(path);
+    if (!config_.save()) log::warn(L"Não consegui gravar {}", Config::path().wstring());
+    log::info(L"Wallpaper escolhido: {}", widen(config_.wallpaper));
+    loadWallpaperAsync(path);
+}
+
+std::vector<ui::WallpaperInfo> App::wallpapers() {
+    std::vector<ui::WallpaperInfo> out;
+    for (const auto& e : wallpaper::listWallpapers()) {
+        out.push_back({widen(e.label), widen(e.base), widen(e.theme), e.path, e.preview, e.userOwned});
+    }
+    return out;
+}
+
+bool App::inspect(const fs::path& path, Manifest& base, Manifest& effective, std::string& error) {
+    if (samePath(path, wallpaperPath_) && hasWallpaper_) {
+        base = wallpaper_.baseManifest;
+        effective = wallpaper_.manifest;
+        return true;
+    }
+    const auto r = wallpaper::loadWallpaper(path);
+    if (!r.error.empty()) {
+        error = r.error;
+        return false;
+    }
+    base = r.wallpaper.baseManifest;
+    effective = base;
+    applyTheme(effective, wallpaper::loadOverrides(wallpaper::wallpaperKey(path)));
+    return true;
+}
+
+Theme App::overrides(const fs::path& path) { return wallpaper::loadOverrides(wallpaper::wallpaperKey(path)); }
+
+void App::setOverrides(const fs::path& path, const Theme& t, bool persist) {
+    if (persist) wallpaper::saveOverrides(wallpaper::wallpaperKey(path), t);
+    if (!samePath(path, wallpaperPath_) || !hasWallpaper_) return;
+    // Ao vivo: parâmetros e cores são só constantes (instantâneo); fonte, resolução e
+    // charset reconstroem o atlas. Nada disto precisa de recompilar o shader.
+    const Manifest before = wallpaper_.manifest;
+    wallpaper_.manifest = wallpaper_.baseManifest;
+    applyTheme(wallpaper_.manifest, t);
+    const Manifest& m = wallpaper_.manifest;
+    const bool layoutChanged = m.cell != before.cell || m.font != before.font || m.fontWeight != before.fontWeight ||
+                               m.charset != before.charset || m.fps != before.fps;
+    if (layoutChanged) {
+        onManifestChanged();
+    } else if (!anyActive()) {
+        renderAllNow(); // em pausa: mostrar a mudança na mesma
+    }
+}
+
+bool App::saveAsTheme(const fs::path& path, const std::wstring& name, std::wstring& error) {
+    Manifest base, effective;
+    std::string err;
+    if (!inspect(path, base, effective, err)) {
+        error = widen(err);
+        return false;
+    }
+    // O tema guarda o que difere do wallpaper original (tema atual + ajustes).
+    const auto loaded = wallpaper::loadWallpaper(path);
+    const fs::path baseDir = loaded.wallpaper.dir;
+    Theme t = wallpaper::loadOverrides(wallpaper::wallpaperKey(path));
+    if (!loaded.wallpaper.themeFile.empty()) {
+        std::ifstream in(loaded.wallpaper.themeFile, std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        Theme current = parseTheme(ss.str()).theme;
+        // Os ajustes ganham ao tema atual.
+        if (!t.font) t.font = current.font;
+        if (!t.fontWeight) t.fontWeight = current.fontWeight;
+        if (!t.cell) t.cell = current.cell;
+        if (!t.scale) t.scale = current.scale;
+        if (!t.fps) t.fps = current.fps;
+        if (!t.charset) t.charset = current.charset;
+        if (!t.background) t.background = current.background;
+        if (!t.palette) t.palette = current.palette;
+        for (const auto& p : current.params) {
+            if (std::none_of(t.params.begin(), t.params.end(), [&](const auto& q) { return q.first == p.first; })) {
+                t.params.push_back(p);
+            }
         }
     }
-    config_.wallpaper = stored;
-    if (!config_.save()) log::warn(L"Não consegui gravar {}", Config::path().wstring());
-    log::info(L"Wallpaper escolhido na tray: {}", widen(catalog_[index].label));
-    loadWallpaperAsync(p);
+    t.base = wallpaper::toUtf8Path(baseDir.filename());
+    const std::string slug = wallpaper::slugify(narrow(name));
+    const fs::path file = baseDir / L"themes" / (widen(slug) + L".toml");
+    std::error_code ec;
+    fs::create_directories(file.parent_path(), ec);
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    out << themeToToml(t, "Tema criado no launcher do AsciiPaper");
+    if (!out) {
+        error = L"Não consegui escrever " + file.wstring();
+        return false;
+    }
+    log::info(L"Tema gravado: {}", file.wstring());
+    return true;
+}
+
+bool App::createWallpaper(const std::wstring& name, const fs::path& templatePath, fs::path& created,
+                          std::wstring& error) {
+    const std::string displayName = narrow(name);
+    const fs::path dir = wallpaper::userWallpaperDir() / widen(wallpaper::slugify(displayName));
+    std::error_code ec;
+    if (fs::exists(dir, ec)) {
+        error = L"Já existe um wallpaper com esse nome.";
+        return false;
+    }
+    fs::create_directories(dir, ec);
+    std::string toml, hlsl;
+    if (!templatePath.empty()) {
+        const auto loaded = wallpaper::loadWallpaper(templatePath);
+        const fs::path src = loaded.wallpaper.dir.empty() ? templatePath : loaded.wallpaper.dir;
+        std::ifstream t(src / L"wallpaper.toml", std::ios::binary), h(src / L"main.hlsl", std::ios::binary);
+        std::stringstream a, b;
+        a << t.rdbuf();
+        b << h.rdbuf();
+        toml = a.str();
+        hlsl = b.str();
+        // Trocar o nome e limpar o autor no [meta].
+        toml = std::regex_replace(toml, std::regex(R"(name\s*=\s*"[^"]*")"), "name = \"" + displayName + "\"",
+                                  std::regex_constants::format_first_only);
+        toml = std::regex_replace(toml, std::regex(R"(author\s*=\s*"[^"]*")"), "author = \"\"",
+                                  std::regex_constants::format_first_only);
+    }
+    if (toml.empty() || hlsl.empty()) {
+        toml = std::regex_replace(std::string(kTemplateToml), std::regex("\\{NAME\\}"), displayName);
+        hlsl = kTemplateHlsl;
+    }
+    std::ofstream(dir / L"wallpaper.toml", std::ios::binary) << toml;
+    std::ofstream(dir / L"main.hlsl", std::ios::binary) << hlsl;
+    created = dir;
+    log::info(L"Wallpaper criado: {}", dir.wstring());
+    return true;
+}
+
+void App::openInEditor(const fs::path& wallpaperPath) {
+    const auto loaded = wallpaper::loadWallpaper(wallpaperPath);
+    const fs::path dir = loaded.wallpaper.dir.empty() ? wallpaperPath : loaded.wallpaper.dir;
+    const fs::path file = dir / widen(loaded.wallpaper.manifest.entry.empty() ? "main.hlsl"
+                                                                              : loaded.wallpaper.manifest.entry);
+    // "edit" usa o editor associado; se não houver associação para .hlsl, o Bloco de notas.
+    auto ok = [](HINSTANCE h) { return reinterpret_cast<INT_PTR>(h) > 32; };
+    if (!ok(ShellExecuteW(nullptr, L"edit", file.c_str(), nullptr, nullptr, SW_SHOWNORMAL)) &&
+        !ok(ShellExecuteW(nullptr, L"open", file.c_str(), nullptr, nullptr, SW_SHOWNORMAL))) {
+        ShellExecuteW(nullptr, L"open", L"notepad.exe", (L"\"" + file.wstring() + L"\"").c_str(), nullptr,
+                      SW_SHOWNORMAL);
+    }
+}
+
+void App::openFolder(const fs::path& path) {
+    std::error_code ec;
+    const fs::path dir = fs::is_directory(path, ec) ? path : path.parent_path();
+    ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+std::vector<std::wstring> App::monospaceFonts() {
+    if (!fontCache_.empty()) return fontCache_;
+    Microsoft::WRL::ComPtr<IDWriteFontCollection> fonts;
+    if (FAILED(dwrite_->GetSystemFontCollection(&fonts))) return {};
+    std::set<std::wstring> names;
+    for (UINT32 i = 0; i < fonts->GetFontFamilyCount(); ++i) {
+        Microsoft::WRL::ComPtr<IDWriteFontFamily> family;
+        Microsoft::WRL::ComPtr<IDWriteFont> font;
+        Microsoft::WRL::ComPtr<IDWriteFont1> font1;
+        Microsoft::WRL::ComPtr<IDWriteLocalizedStrings> strings;
+        if (FAILED(fonts->GetFontFamily(i, &family)) || FAILED(family->GetFont(0, &font)) ||
+            FAILED(font.As(&font1)) || !font1->IsMonospacedFont() || font->GetSimulations() != 0 ||
+            FAILED(family->GetFamilyNames(&strings))) {
+            continue;
+        }
+        UINT32 index = 0;
+        BOOL exists = FALSE;
+        strings->FindLocaleName(L"en-us", &index, &exists);
+        if (!exists) index = 0;
+        UINT32 len = 0;
+        strings->GetStringLength(index, &len);
+        std::wstring name(len + 1, L'\0');
+        strings->GetString(index, name.data(), len + 1);
+        name.resize(len);
+        if (!name.empty() && name[0] != L'@') names.insert(name);
+    }
+    fontCache_.assign(names.begin(), names.end());
+    return fontCache_;
+}
+
+void App::setPaused(bool p) {
+    pause_.global.user = p;
+    updatePause();
+    if (flyout_) flyout_->refresh();
+}
+
+ui::GlobalSettings App::settings() const {
+    ui::GlobalSettings s;
+    s.spanMonitors = config_.spanMonitors;
+    s.interactionAlways = config_.interaction == "always";
+    s.pauseOnMaximized = config_.pauseOnMaximized;
+    s.pauseOnBatterySaver = config_.pauseOnBatterySaver;
+    s.maxFps = config_.maxFps;
+    s.autostart = autostartEnabled();
+    return s;
+}
+
+void App::setSettings(const ui::GlobalSettings& s) {
+    const bool spanChanged = s.spanMonitors != config_.spanMonitors;
+    config_.spanMonitors = s.spanMonitors;
+    config_.interaction = s.interactionAlways ? "always" : "desktop_only";
+    config_.pauseOnMaximized = s.pauseOnMaximized;
+    config_.pauseOnBatterySaver = s.pauseOnBatterySaver;
+    config_.maxFps = std::clamp(s.maxFps, 1, 240);
+    config_.save();
+    if (s.autostart != autostartEnabled()) setAutostart(s.autostart);
+
+    settings_.maxFps = config_.maxFps;
+    settings_.pause.pauseOnMaximized = config_.pauseOnMaximized;
+    settings_.pause.pauseOnBatterySaver = config_.pauseOnBatterySaver;
+    mouse_.mode = s.interactionAlways ? input::InteractionMode::Always : input::InteractionMode::DesktopOnly;
+    if (spanChanged) {
+        rebuildCanvases();
+        renderAllNow();
+    }
+    updatePause();
+}
+
+std::wstring App::lastError() const { return widen(errorText_); }
+
+void App::openLauncher() {
+    if (launcher_) launcher_->show();
+}
+
+void App::showTrayFlyout() {
+    if (!flyout_) return;
+    NOTIFYICONIDENTIFIER id{};
+    id.cbSize = sizeof(id);
+    id.hWnd = controller_;
+    id.uID = 1;
+    RECT anchor{};
+    if (FAILED(Shell_NotifyIconGetRect(&id, &anchor))) {
+        POINT pt{};
+        GetCursorPos(&pt);
+        anchor = {pt.x, pt.y, pt.x, pt.y};
+    }
+    flyout_->toggle(anchor);
 }
 
 // ---------------------------------------------------------------------------
@@ -461,36 +808,86 @@ HRESULT App::prepareSurface(render::MonitorSurface& s) {
     desc.weight = m.fontWeight;
     desc.cellHeightPx = scaleByDpi(m.cell, s.monitor.dpi ? s.monitor.dpi : 96);
     desc.charset = m.charset;
+    desc.glyphs = m.glyphs;
     if (!s.atlas.valid() || s.atlas.key() != desc.key()) {
         if (HRESULT hr = s.atlas.build(device_.device(), dwrite_.Get(), desc); FAILED(hr)) return hr;
-        s.grid.reset(); // células de outro tamanho
     }
-    return s.grid.resize(device_.device(), s.width(), s.height(), s.atlas);
+    s.grid.setLayout(s.width(), s.height(), s.atlas);
+    return S_OK;
 }
 
 void App::prepareAllSurfaces() {
     for (auto& s : surfaces_) prepareSurface(*s);
 }
 
-wallpaper::FrameConstants App::makeFrame(render::MonitorSurface& s, double time, double dt) const {
+void App::rebuildCanvases() {
+    std::vector<render::MonitorSurface*> ready;
+    for (auto& s : surfaces_) {
+        s->canvas = nullptr;
+        if (s->hasSwapChain() && s->atlas.valid()) ready.push_back(s.get());
+    }
+    if (ready.empty()) {
+        canvases_.clear();
+        return;
+    }
+    auto monitorOf = [](const render::MonitorSurface* s) { return CanvasMonitor{s->monitor.rect, s->grid.layout()}; };
+    const bool span = config_.spanMonitors && !options_.windowed && ready.size() > 1;
+    const size_t count = span ? 1 : ready.size();
+    if (canvases_.size() != count) {
+        canvases_.clear();
+        for (size_t i = 0; i < count; ++i) canvases_.push_back(std::make_unique<render::CellCanvas>());
+    }
+    if (span) {
+        std::vector<CanvasMonitor> ms;
+        size_t primary = 0;
+        for (size_t i = 0; i < ready.size(); ++i) {
+            ms.push_back(monitorOf(ready[i]));
+            if (ready[i]->monitor.primary) primary = i;
+        }
+        canvases_[0]->resize(device_.device(), computeSpanCanvas(ms, primary));
+        for (auto* s : ready) s->canvas = canvases_[0].get();
+    } else {
+        for (size_t i = 0; i < ready.size(); ++i) {
+            canvases_[i]->resize(device_.device(), computeSingleCanvas(monitorOf(ready[i])));
+            ready[i]->canvas = canvases_[i].get();
+        }
+    }
+}
+
+render::MonitorSurface* App::referenceSurface(const render::CellCanvas& canvas) const {
+    render::MonitorSurface* first = nullptr;
+    for (const auto& s : surfaces_) {
+        if (s->canvas != &canvas) continue;
+        if (s->monitor.primary) return s.get();
+        if (!first) first = s.get();
+    }
+    return first;
+}
+
+wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const render::MonitorSurface& ref,
+                                         double time, double dt) const {
     wallpaper::FrameConstants f{};
-    const GridLayout& g = s.grid.layout();
+    const CanvasLayout& c = canvas.layout();
     const Manifest& m = wallpaper_.manifest;
-    const Rect& r = s.monitor.rect;
-    const float cw = static_cast<float>(g.cellW), ch = static_cast<float>(g.cellH);
+    const float cw = static_cast<float>(c.cellW), ch = static_cast<float>(c.cellH);
 
     f.time = static_cast<float>(time);
     f.dt = static_cast<float>(dt);
-    f.gridW = static_cast<uint32_t>(g.cols);
-    f.gridH = static_cast<uint32_t>(g.rows);
+    f.gridW = static_cast<uint32_t>(c.cols);
+    f.gridH = static_cast<uint32_t>(c.rows);
 
-    auto toCellX = [&](LONG x) { return (static_cast<float>(x - r.left - g.originX)) / cw; };
-    auto toCellY = [&](LONG y) { return (static_cast<float>(y - r.top - g.originY)) / ch; };
-    const POINT c = mouse_.cursor;
-    const bool onThisMonitor = c.x >= r.left && c.x < r.right && c.y >= r.top && c.y < r.bottom;
-    const bool inside = onThisMonitor && mouse_.overDesktop;
-    f.mouseX = toCellX(c.x);
-    f.mouseY = toCellY(c.y);
+    auto toCellX = [&](LONG x) { return static_cast<float>(x - c.originPx.x) / cw; };
+    auto toCellY = [&](LONG y) { return static_cast<float>(y - c.originPx.y) / ch; };
+    const POINT p = mouse_.cursor;
+    bool onCanvas = false;
+    for (const auto& s : surfaces_) {
+        if (s->canvas != &canvas) continue;
+        const Rect& r = s->monitor.rect;
+        onCanvas = onCanvas || (p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom);
+    }
+    const bool inside = onCanvas && mouse_.overDesktop;
+    f.mouseX = toCellX(p.x);
+    f.mouseY = toCellY(p.y);
     f.mouseVX = mouseVelX_ / cw;
     f.mouseVY = mouseVelY_ / ch;
     f.inside = inside ? 1u : 0u;
@@ -506,7 +903,8 @@ wallpaper::FrameConstants App::makeFrame(render::MonitorSurface& s, double time,
         f.clickTime = -1000.0f;
     }
 
-    f.charsetSize = static_cast<uint32_t>(s.atlas.charsetSize());
+    f.charsetSize = static_cast<uint32_t>(ref.atlas.charsetSize());
+    f.glyphCount = static_cast<uint32_t>(ref.atlas.glyphCount());
     toFloat4(m.background, f.background);
     f.paletteCount = static_cast<uint32_t>(std::min<size_t>(m.palette.size(), 8));
     for (uint32_t i = 0; i < f.paletteCount; ++i) toFloat4(m.palette[i], f.palette[i]);
@@ -515,43 +913,58 @@ wallpaper::FrameConstants App::makeFrame(render::MonitorSurface& s, double time,
     for (size_t i = 0; i < m.params.size() && i < 16; ++i) f.params[i] = m.params[i].value;
     f.cellPxW = cw;
     f.cellPxH = ch;
-    f.resolutionW = static_cast<float>(s.width());
-    f.resolutionH = static_cast<float>(s.height());
+    f.resolutionW = static_cast<float>(c.cols) * cw;
+    f.resolutionH = static_cast<float>(c.rows) * ch;
+    // Unidade de mundo = `scale` px lógicos no monitor de referência. Não depende de `cell`:
+    // mudar a resolução da grelha deixa o efeito do mesmo tamanho, só mais ou menos "pixelado".
+    const float unitPx = std::max(1.0f, m.scale) * static_cast<float>(ref.monitor.dpi ? ref.monitor.dpi : 96) / 96.0f;
+    f.worldPerCellX = cw / unitPx;
+    f.worldPerCellY = ch / unitPx;
+    f.monitorCount = static_cast<uint32_t>(std::min<size_t>(c.monitorCells.size(), 8));
+    for (uint32_t i = 0; i < f.monitorCount; ++i) {
+        const Rect& r = c.monitorCells[i];
+        f.monitors[i][0] = r.left;
+        f.monitors[i][1] = r.top;
+        f.monitors[i][2] = r.right;
+        f.monitors[i][3] = r.bottom;
+    }
     return f;
 }
 
-void App::drawError(render::MonitorSurface& s) {
+void App::drawError(render::CellCanvas& canvas, const render::MonitorSurface& ref) {
+    // No canto superior esquerdo do monitor de referência.
+    const Point p0 = canvasCellFor(canvas.layout(), CanvasMonitor{ref.monitor.rect, ref.grid.layout()}, 0, 0);
+    const int col = std::max(0, p0.x) + 1;
+    const int row = std::max(0, p0.y) + 1;
     const Rgba8 fg{255, 120, 120, 255}, bg{24, 4, 6, 235}, dim{200, 200, 210, 255};
-    s.grid.writeText(device_.context(), s.atlas, 1, 1, " AsciiPaper: erro no wallpaper (o último estado bom continua) ",
-                     dim, bg);
+    canvas.writeText(device_.context(), ref.atlas, col, row,
+                     " AsciiPaper: erro no wallpaper (o último estado bom continua) ", dim, bg);
     std::istringstream lines(errorText_);
     std::string line;
-    int row = 2;
-    while (std::getline(lines, line) && row < 14) {
+    int r = row + 1;
+    while (std::getline(lines, line) && r < row + 13) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
-        s.grid.writeText(device_.context(), s.atlas, 1, row++, " " + line + " ", fg, bg);
+        canvas.writeText(device_.context(), ref.atlas, col, r++, " " + line + " ", fg, bg);
     }
 }
 
-HRESULT App::renderSurface(render::MonitorSurface& s, double time, double dt) {
-    if (!s.hasSwapChain()) return S_OK;
-    if ((!s.atlas.valid() || !s.grid.valid()) && FAILED(prepareSurface(s))) {
-        return S_OK; // sem wallpaper utilizável: nada para desenhar (fica o último frame)
-    }
-    if (options_.windowed && s.hwnd()) {
-        // Em janela, a "área do monitor" é a área cliente, onde quer que a janela esteja.
-        POINT o{0, 0};
-        ClientToScreen(s.hwnd(), &o);
-        s.monitor.rect = {o.x, o.y, o.x + s.width(), o.y + s.height()};
-    }
+void App::computeCanvas(render::CellCanvas& canvas, double time, double dt) {
+    render::MonitorSurface* ref = referenceSurface(canvas);
+    if (!ref || !canvas.valid()) return;
     auto* ctx = device_.context();
     if (program_.valid()) {
-        program_.dispatch(ctx, s.grid, makeFrame(s, time, dt));
+        program_.dispatch(ctx, canvas, makeFrame(canvas, *ref, time, dt));
     } else {
-        s.grid.clear(ctx);
+        canvas.clear(ctx);
     }
-    if (!errorText_.empty()) drawError(s);
-    s.grid.draw(ctx, pipeline_, s.rtv(), s.atlas, wallpaper_.manifest.background);
+    if (!errorText_.empty()) drawError(canvas, *ref);
+}
+
+HRESULT App::drawSurface(render::MonitorSurface& s) {
+    if (!s.hasSwapChain() || !s.canvas || !s.atlas.valid()) return S_OK;
+    auto* ctx = device_.context();
+    s.grid.draw(device_.device(), ctx, pipeline_, s.rtv(), s.atlas, *s.canvas, s.monitor.rect,
+                wallpaper_.manifest.background);
     if (captureRequested_) {
         // Antes do Present: com o flip model o back buffer fica indefinido depois.
         captureRequested_ = false;
@@ -567,11 +980,17 @@ HRESULT App::renderSurface(render::MonitorSurface& s, double time, double dt) {
     return s.present();
 }
 
-void App::renderSurfaceNow(render::MonitorSurface& s) {
+void App::renderAllNow() {
+    if (canvases_.empty()) return;
     const double dt = 1.0 / std::clamp(settings_.fps, 1, settings_.maxFps);
-    const HRESULT hr = renderSurface(s, now(), dt);
-    if (render::isDeviceLost(hr)) {
-        handleDeviceLost(hr);
+    const double t = now();
+    for (auto& c : canvases_) computeCanvas(*c, t, dt);
+    for (auto& s : surfaces_) {
+        const HRESULT hr = drawSurface(*s);
+        if (render::isDeviceLost(hr)) {
+            handleDeviceLost(hr);
+            return;
+        }
     }
 }
 
@@ -591,9 +1010,31 @@ void App::renderFrame() {
     mouseVelY_ += (vy - mouseVelY_) * k;
     lastCursor_ = mouse_.cursor;
 
+    if (options_.windowed) {
+        // Em janela, o "monitor" é a área cliente, onde quer que a janela esteja.
+        for (auto& s : surfaces_) {
+            if (!s->hwnd()) continue;
+            POINT o{0, 0};
+            ClientToScreen(s->hwnd(), &o);
+            const Rect r{o.x, o.y, o.x + s->width(), o.y + s->height()};
+            if (!(r == s->monitor.rect)) {
+                s->monitor.rect = r;
+                rebuildCanvases();
+            }
+        }
+    }
+
+    // 1) Simular cada canvas que tenha pelo menos um monitor visível (uma vez por frame,
+    //    mesmo que cubra vários monitores). 2) Cada monitor ativo desenha a sua parte.
+    for (auto& c : canvases_) {
+        const bool used = std::any_of(surfaces_.begin(), surfaces_.end(), [&](const auto& s) {
+            return s->canvas == c.get() && !any(s->pause) && s->hasSwapChain();
+        });
+        if (used) computeCanvas(*c, t, dt);
+    }
     for (auto& s : surfaces_) {
         if (any(s->pause) || !s->hasSwapChain()) continue;
-        const HRESULT hr = renderSurface(*s, t, dt);
+        const HRESULT hr = drawSurface(*s);
         if (render::isDeviceLost(hr)) {
             handleDeviceLost(hr);
             return;
@@ -621,9 +1062,6 @@ std::unique_ptr<render::MonitorSurface> App::createSurface(const desktop::Monito
         return nullptr;
     }
     prepareSurface(*s);
-    // Primeiro frame ANTES de mostrar a janela: é isto que evita o flash preto.
-    renderSurfaceNow(*s);
-    s->show();
     const auto& g = s->grid.layout();
     log::info(L"Monitor {}{}: {}x{} em ({}, {}), {} DPI ({}%), swapchain {}, grelha {}x{} de {}x{} px", mon.device,
               mon.primary ? L" (principal)" : L"", mon.rect.width(), mon.rect.height(), mon.rect.left, mon.rect.top,
@@ -646,6 +1084,10 @@ bool App::attachDesktop() {
         log::error(L"Nenhuma superfície criada");
         return false;
     }
+    // Primeiro frame ANTES de mostrar as janelas: é isto que evita o flash preto.
+    rebuildCanvases();
+    renderAllNow();
+    for (auto& s : surfaces_) s->show();
     updatePause();
     return true;
 }
@@ -657,21 +1099,26 @@ bool App::createWindowedSurface() {
     }
     RECT rc{};
     GetClientRect(s->hwnd(), &rc);
+    POINT o{0, 0};
+    ClientToScreen(s->hwnd(), &o);
     s->monitor.dpi = GetDpiForWindow(s->hwnd());
     s->monitor.device = L"(janela)";
+    s->monitor.primary = true;
+    s->monitor.rect = {o.x, o.y, o.x + rc.right, o.y + rc.bottom};
     mouse_.windowedTarget = s->hwnd();
     if (FAILED(s->createSwapChain(device_, rc.right, rc.bottom))) {
         return false;
     }
     prepareSurface(*s);
-    renderSurfaceNow(*s);
+    surfaces_.push_back(std::move(s));
+    rebuildCanvases();
+    renderAllNow();
     if (options_.screenshot.empty()) {
-        s->show();
+        surfaces_.back()->show();
     } else {
         // --screenshot: a janela nunca aparece; deixamos a animação correr 3 s e gravamos.
         SetTimer(controller_, TIMER_SCREENSHOT, 3000, nullptr);
     }
-    surfaces_.push_back(std::move(s));
     updatePause();
     return true;
 }
@@ -707,13 +1154,17 @@ void App::syncLayout() {
     });
 
     // 2) Atualizar as que ficaram e criar as novas.
+    std::vector<render::MonitorSurface*> fresh;
     unsigned index = 0;
     for (const auto& m : monitors) {
         auto it = std::find_if(surfaces_.begin(), surfaces_.end(),
                                [&](const auto& s) { return s->monitor.device == m.device; });
         if (it == surfaces_.end()) {
             log::info(L"Monitor {} ligado", m.device);
-            if (auto s = createSurface(m, index)) surfaces_.push_back(std::move(s));
+            if (auto s = createSurface(m, index)) {
+                fresh.push_back(s.get());
+                surfaces_.push_back(std::move(s));
+            }
         } else {
             auto& s = **it;
             if (!s.monitor.sameLayout(m)) {
@@ -724,8 +1175,7 @@ void App::syncLayout() {
             }
             s.monitor = m;
             s.index = index;
-            // Primeiro os buffers, depois atlas/grelha para o DPI novo, depois a janela e um
-            // frame novo: assim nunca se vê um frame antigo esticado ou cortado.
+            // Primeiro os buffers, depois atlas/grelha para o DPI novo, depois a janela.
             const HRESULT hr = s.resize(device_, m.rect.width(), m.rect.height());
             if (render::isDeviceLost(hr)) {
                 handleDeviceLost(hr);
@@ -735,10 +1185,13 @@ void App::syncLayout() {
             // A origem do WorkerW muda se aparecer um monitor à esquerda/acima, por isso
             // reposicionamos sempre (é barato).
             workerw_.place(s.hwnd(), m.rect);
-            renderSurfaceNow(s);
         }
         ++index;
     }
+    // O canvas estendido depende de TODOS os monitores: refazer e desenhar um frame novo.
+    rebuildCanvases();
+    renderAllNow();
+    for (auto* s : fresh) s->show();
     updatePause();
 }
 
@@ -757,6 +1210,7 @@ void App::handleDeviceLost(HRESULT hr) {
               win::hrToString(device_.removedReason()));
     stopFrameTimer();
     for (auto& s : surfaces_) s->releaseSwapChain();
+    canvases_.clear();
     program_.releaseDeviceObjects();
     pipeline_.reset();
     device_.reset();
@@ -780,8 +1234,9 @@ bool App::recreateDeviceResources() {
         GetClientRect(s->hwnd(), &rc);
         if (FAILED(s->createSwapChain(device_, rc.right, rc.bottom))) return false;
         prepareSurface(*s);
-        if (FAILED(renderSurface(*s, now(), 1.0 / settings_.fps))) return false;
     }
+    rebuildCanvases();
+    renderAllNow();
     log::info(L"Dispositivo D3D recriado");
     return true;
 }
@@ -804,6 +1259,7 @@ void App::updatePause() {
     }
 
     bool windowPause = false;
+    bool resumedAny = false;
     for (size_t i = 0; i < surfaces_.size(); ++i) {
         auto& s = *surfaces_[i];
         PauseReason r = evaluatePause(pause_.global, coverage[i], pause_.rules);
@@ -813,14 +1269,12 @@ void App::updatePause() {
         if (benchmarking_) r = PauseReason::None; // o bench mede sempre
         if (r != s.pause) {
             log::info(L"Monitor {}: {} -> {}", s.monitor.device, describe(s.pause), describe(r));
-            const bool resumed = any(s.pause) && !any(r);
+            resumedAny = resumedAny || (any(s.pause) && !any(r));
             s.pause = r;
-            if (resumed && s.hasSwapChain()) {
-                renderSurfaceNow(s); // frame fresco logo, em vez de esperar pelo timer
-            }
         }
         windowPause = windowPause || isWindowPause(r);
     }
+    if (resumedAny) renderAllNow(); // frame fresco logo, em vez de esperar pelo timer
 
     const bool active = anyActive();
     // Rato: só registamos o Raw Input quando há algo a desenhar. Em pausa o sistema deixa
@@ -874,8 +1328,12 @@ void App::finishBench() {
     std::wstring cells;
     for (const auto& s : surfaces_) {
         const auto& g = s->grid.layout();
-        cells += std::format(L"\n  {}: {}x{} px, grelha {}x{} ({} células de {}x{} px)", s->monitor.device,
-                             s->width(), s->height(), g.cols, g.rows, g.cellCount(), g.cellW, g.cellH);
+        cells += std::format(L"\n  {}: {}x{} px, grelha {}x{} de {}x{} px", s->monitor.device, s->width(),
+                             s->height(), g.cols, g.rows, g.cellW, g.cellH);
+    }
+    for (const auto& c : canvases_) {
+        cells += std::format(L"\n  canvas: {}x{} ({} células)", c->layout().cols, c->layout().rows,
+                             c->layout().cellCount());
     }
     const std::wstring report = std::format(
         L"\n=== AsciiPaper --bench ({}) ===\n"
@@ -908,35 +1366,6 @@ LRESULT CALLBACK App::controllerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-void App::onCommand(UINT id) {
-    if (id >= ID_TRAY_WALLPAPER_FIRST && id <= ID_TRAY_WALLPAPER_LAST) {
-        selectWallpaper(id - ID_TRAY_WALLPAPER_FIRST);
-        return;
-    }
-    switch (id) {
-    case ID_TRAY_PAUSE:
-        pause_.global.user = !pause_.global.user;
-        updatePause();
-        break;
-    case ID_TRAY_RELOAD:
-        loadWallpaperAsync(wallpaperPath_);
-        break;
-    case ID_TRAY_OPEN_WALLPAPERS: {
-        const fs::path dir = wallpaper_.dir.empty() ? wallpaper::wallpaperRoots().front() : wallpaper_.dir.parent_path();
-        ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-        break;
-    }
-    case ID_TRAY_OPEN_LOG:
-        ShellExecuteW(nullptr, L"open", log::folder().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-        break;
-    case ID_TRAY_EXIT:
-        PostQuitMessage(0);
-        break;
-    default:
-        break;
-    }
-}
-
 LRESULT App::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
     if (taskbarCreated_ != 0 && msg == taskbarCreated_) {
         log::info(L"Explorer (re)iniciado: a voltar a ligar");
@@ -951,25 +1380,12 @@ LRESULT App::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
         switch (LOWORD(lp)) {
         case WM_CONTEXTMENU:
         case NIN_SELECT:
-        case NIN_KEYSELECT: {
-            catalog_ = wallpaper::listWallpapers(); // reler: pode haver wallpapers novos
-            TrayMenuState state;
-            state.paused = userPaused();
-            std::error_code ec;
-            for (size_t i = 0; i < catalog_.size(); ++i) {
-                state.wallpapers.push_back(widen(catalog_[i].label));
-                if (fs::equivalent(catalog_[i].path, wallpaperPath_, ec)) state.current = static_cast<int>(i);
-            }
-            tray_.showMenu(state);
+        case NIN_KEYSELECT:
+            showTrayFlyout();
             break;
-        }
         default:
             break;
         }
-        return 0;
-
-    case WM_COMMAND:
-        onCommand(LOWORD(wp));
         return 0;
 
     case WM_APP_LOAD_DONE:
@@ -996,8 +1412,12 @@ LRESULT App::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
             if (render::isDeviceLost(hr)) {
                 handleDeviceLost(hr);
             } else if (rc.right > 0 && rc.bottom > 0) {
+                POINT o{0, 0};
+                ClientToScreen(h, &o);
+                s->monitor.rect = {o.x, o.y, o.x + rc.right, o.y + rc.bottom};
                 prepareSurface(*s);
-                renderSurfaceNow(*s); // redesenhar já, mesmo dentro do loop modal de resize
+                rebuildCanvases();
+                renderAllNow(); // redesenhar já, mesmo dentro do loop modal de resize
             }
         }
         updatePause();
@@ -1105,6 +1525,7 @@ void App::onTimer(UINT_PTR id) {
     case TIMER_REATTACH:
         KillTimer(controller_, id);
         destroySurfaces();
+        canvases_.clear();
         if (attachDesktop()) {
             log::info(L"Ligado ao desktop");
             reattachAttempts_ = 0;

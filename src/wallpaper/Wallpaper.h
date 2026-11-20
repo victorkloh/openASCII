@@ -16,7 +16,8 @@ struct LoadedWallpaper {
     fs::path themeFile;   // vazio se não for um tema
     fs::path watchDir;    // pasta a vigiar para hot reload
     std::string label;    // "ripple" ou "ripple / ember"
-    Manifest manifest;    // já com o tema aplicado
+    Manifest baseManifest; // com o tema aplicado, SEM os ajustes do utilizador
+    Manifest manifest;     // o que está a correr: base + ajustes do utilizador
     std::string source;   // conteúdo do ficheiro `entry`
     std::vector<std::string> warnings;
 };
@@ -38,7 +39,26 @@ LoadResult loadWallpaper(const fs::path& folderOrTheme);
 struct CatalogEntry {
     std::string label; // para o menu
     fs::path path;     // pasta ou ficheiro de tema
+    std::string base;  // nome da pasta do wallpaper
+    std::string theme; // nome do tema (vazio = o wallpaper em si)
+    fs::path preview;  // preview.png (pode não existir)
+    bool userOwned = false; // está em %APPDATA% (o utilizador pode editar)
 };
+
+// Chave estável e portável de um wallpaper: relativa à pasta de wallpapers quando possível
+// ("ripple", "ripple/themes/ember.toml"); usada na config e nos ajustes do utilizador.
+std::string wallpaperKey(const fs::path& path);
+
+// Ficheiro com os ajustes do utilizador para um wallpaper (cores, resolução, params...).
+fs::path overridesFile(const std::string& key);
+Theme loadOverrides(const std::string& key);
+bool saveOverrides(const std::string& key, const Theme& overrides);
+
+// Pasta dos wallpapers do utilizador (%APPDATA%\AsciiPaper\wallpapers), criada se preciso.
+fs::path userWallpaperDir();
+
+// Transforma um nome em nome de pasta: "Meu Fogo!" -> "meu-fogo".
+std::string slugify(std::string_view name);
 
 // Todos os wallpapers e os seus temas (themes/*.toml), para o menu da tray.
 std::vector<CatalogEntry> listWallpapers();

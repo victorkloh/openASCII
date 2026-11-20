@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(AsciiPaper
-    VERSION 0.2.0
+    VERSION 0.3.0
     DESCRIPTION "Motor de wallpapers ASCII reativos para Windows"
     LANGUAGES CXX RC)
 
@@ -44,6 +44,7 @@ configure_file(src/version.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/version.h 
 # asciipaper_core: lógica pura, sem Win32. É o que os testes exercitam.
 # ---------------------------------------------------------------------------
 add_library(asciipaper_core STATIC
+    src/core/Canvas.cpp
     src/core/Color.cpp
     src/core/CommandLine.cpp
     src/core/Geometry.cpp
@@ -76,6 +77,11 @@ add_executable(asciipaper WIN32
     src/render/MonitorSurface.cpp
     src/render/Screenshot.cpp
     src/render/ShaderCompiler.cpp
+    src/ui/Gfx.cpp
+    src/ui/Launcher.cpp
+    src/ui/TrayFlyout.cpp
+    src/ui/Ui.cpp
+    src/ui/UiWindow.cpp
     src/util/Log.cpp
     src/util/Win32.cpp
     src/wallpaper/DirectoryWatcher.cpp
@@ -86,7 +92,7 @@ target_include_directories(asciipaper PRIVATE
     src res shaders ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(asciipaper PRIVATE
     asciipaper_core WIL::WIL tomlplusplus::tomlplusplus
-    d3d11 dxgi d3dcompiler dwrite windowscodecs dwmapi shcore shell32 user32 wtsapi32 advapi32 ole32)
+    d3d11 dxgi d3dcompiler d2d1 dwrite windowscodecs dwmapi shcore shell32 user32 wtsapi32 advapi32 ole32)
 # O manifesto (PerMonitorV2, UTF-8, Win10) vem do app.rc; o linker não gera outro.
 target_link_options(asciipaper PRIVATE /MANIFEST:NO)
 set_target_properties(asciipaper PROPERTIES
@@ -110,6 +116,7 @@ if(ASCIIPAPER_BUILD_TESTS)
     find_package(doctest CONFIG REQUIRED)
     add_executable(asciipaper_tests
         tests/main.cpp
+        tests/test_canvas.cpp
         tests/test_color_utf8_grid.cpp
         tests/test_command_line.cpp
         tests/test_geometry.cpp

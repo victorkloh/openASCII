@@ -35,6 +35,7 @@ Config Config::load() {
         c.maxFps = std::clamp(static_cast<int>(t["max_fps"].value_or(int64_t{c.maxFps})), 1, 240);
         c.pauseOnMaximized = t["pause_on_maximized"].value_or(c.pauseOnMaximized);
         c.pauseOnBatterySaver = t["pause_on_battery_saver"].value_or(c.pauseOnBatterySaver);
+        c.spanMonitors = t["span_monitors"].value_or(c.spanMonitors);
     } catch (const toml::parse_error& e) {
         log::warn(L"config.toml inválido (linha {}): {}; a usar valores por defeito", e.source().begin.line,
                   std::wstring(e.description().begin(), e.description().end()));
@@ -52,6 +53,7 @@ bool Config::save() const {
         {"max_fps", maxFps},
         {"pause_on_maximized", pauseOnMaximized},
         {"pause_on_battery_saver", pauseOnBatterySaver},
+        {"span_monitors", spanMonitors},
     };
     std::ofstream out(file, std::ios::binary | std::ios::trunc);
     if (!out) return false;

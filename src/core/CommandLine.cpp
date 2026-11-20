@@ -53,6 +53,25 @@ ParseResult parseCommandLine(std::span<const std::wstring_view> args) {
             if (!v) return result;
             o.screenshot = std::wstring(*v);
             o.windowed = true; // renderiza numa janela escondida, nunca no desktop
+        } else if (a == L"--launcher") {
+            o.openLauncher = true;
+        } else if (a == L"--ui-screenshot") {
+            const auto* v = needValue(a);
+            if (!v) return result;
+            o.uiScreenshot = std::wstring(*v);
+            o.windowed = true;
+            if (i + 1 < args.size() && !args[i + 1].empty() && args[i + 1][0] != L'-') {
+                int page = 0;
+                if (parsePositiveInt(args[i + 1], page) || args[i + 1] == L"0") {
+                    o.uiPage = page;
+                    ++i;
+                }
+            }
+        } else if (a == L"--flyout-screenshot") {
+            const auto* v = needValue(a);
+            if (!v) return result;
+            o.flyoutScreenshot = std::wstring(*v);
+            o.windowed = true;
         } else if (a == L"--bench") {
             const auto* v = needValue(a);
             if (!v) return result;
@@ -74,6 +93,7 @@ const wchar_t* usageText() {
            L"  --wallpaper <pasta>   carrega um wallpaper específico (Fase 3)\n"
            L"  --bench <segundos>    mede frame time, CPU e RAM\n"
            L"  --screenshot <png>    renderiza 3 s fora do ecrã (1280x720), grava um PNG e sai\n"
+           L"  --launcher            abre o launcher ao arrancar\n"
            L"  --verbose, -v         logs detalhados, também na consola\n"
            L"  --help, -h            mostra esta ajuda\n";
 }

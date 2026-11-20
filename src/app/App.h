@@ -1,6 +1,6 @@
 #pragma once
 // A aplicação: liga o desktop (WorkerW, monitores, pausas), o render ASCII, o wallpaper
-// ativo, o rato e a tray, e corre o loop principal.
+// ativo, o rato, a bandeja e o launcher, e corre o loop principal.
 
 #include <windows.h>
 #include <dwrite_2.h>
@@ -22,9 +22,16 @@
 #include "render/Device.h"
 #include "render/GridRenderer.h"
 #include "render/MonitorSurface.h"
+#include "ui/AppControl.h"
 #include "wallpaper/DirectoryWatcher.h"
 #include "wallpaper/ShaderBackend.h"
 #include "wallpaper/Wallpaper.h"
+
+namespace ap::ui {
+class Gfx;
+class TrayFlyout;
+class Launcher;
+} // namespace ap::ui
 
 namespace ap::app {
 
@@ -34,10 +41,10 @@ struct Settings {
     PauseRules pause;
 };
 
-class App {
+class App final : public ui::AppControl {
 public:
     explicit App(const Options& options);
-    ~App();
+    ~App() override;
     App(const App&) = delete;
     App& operator=(const App&) = delete;
 
@@ -45,6 +52,27 @@ public:
 
     // Usado pelo handler de crash para repor o wallpaper mesmo se tudo correr mal.
     static const std::wstring& originalWallpaper();
+
+    // ---- ui::AppControl ----
+    std::vector<ui::WallpaperInfo> wallpapers() override;
+    std::filesystem::path activePath() const override { return wallpaperPath_; }
+    void activate(const std::filesystem::path& path) override;
+    bool inspect(const std::filesystem::path& path, Manifest& base, Manifest& effective, std::string& error) override;
+    Theme overrides(const std::filesystem::path& path) override;
+    void setOverrides(const std::filesystem::path& path, const Theme& overrides, bool persist) override;
+    bool saveAsTheme(const std::filesystem::path& path, const std::wstring& name, std::wstring& error) override;
+    bool createWallpaper(const std::wstring& name, const std::filesystem::path& templatePath,
+                         std::filesystem::path& created, std::wstring& error) override;
+    void openInEditor(const std::filesystem::path& wallpaperPath) override;
+    void openFolder(const std::filesystem::path& path) override;
+    std::vector<std::wstring> monospaceFonts() override;
+    bool paused() const override { return pause_.global.user; }
+    void setPaused(bool paused) override;
+    ui::GlobalSettings settings() const override;
+    void setSettings(const ui::GlobalSettings& settings) override;
+    std::wstring lastError() const override;
+    void openLauncher() override;
+    void quit() override { PostQuitMessage(0); }
 
 private:
     using WinEventHook = wil::unique_any<HWINEVENTHOOK, decltype(&::UnhookWinEvent), ::UnhookWinEvent>;
@@ -65,14 +93,14 @@ private:
     static LRESULT CALLBACK controllerProc(HWND, UINT, WPARAM, LPARAM);
     LRESULT onMessage(UINT msg, WPARAM wp, LPARAM lp);
     void onTimer(UINT_PTR id);
-    void onCommand(UINT id);
     static void CALLBACK onWinEvent(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD);
+    void showTrayFlyout();
 
     // Wallpaper
     void loadWallpaperSync(const std::filesystem::path& path);
     void loadWallpaperAsync(const std::filesystem::path& path);
     void applyLoadJob(LoadJob job);
-    void selectWallpaper(size_t catalogIndex);
+    void onManifestChanged(); // fps, atlas, canvas
     std::filesystem::path initialWallpaperPath() const;
 
     // Desktop
@@ -87,11 +115,15 @@ private:
     // Render
     HRESULT prepareSurface(render::MonitorSurface& s); // atlas + grelha para o DPI e wallpaper atuais
     void prepareAllSurfaces();
+    void rebuildCanvases();                           // um canvas estendido, ou um por monitor
+    render::MonitorSurface* referenceSurface(const render::CellCanvas& canvas) const;
     void renderFrame();
-    HRESULT renderSurface(render::MonitorSurface& s, double time, double dt);
-    void renderSurfaceNow(render::MonitorSurface& s);
-    wallpaper::FrameConstants makeFrame(render::MonitorSurface& s, double time, double dt) const;
-    void drawError(render::MonitorSurface& s);
+    void renderAllNow();                              // um frame já, em todos (mesmo em pausa)
+    void computeCanvas(render::CellCanvas& canvas, double time, double dt);
+    HRESULT drawSurface(render::MonitorSurface& s);
+    wallpaper::FrameConstants makeFrame(const render::CellCanvas& canvas, const render::MonitorSurface& ref,
+                                        double time, double dt) const;
+    void drawError(render::CellCanvas& canvas, const render::MonitorSurface& ref);
     void armFrameTimer(bool restart);
     void stopFrameTimer();
     bool anyActive() const;
@@ -102,7 +134,6 @@ private:
 
     // Pausas
     void updatePause();
-    bool userPaused() const { return pause_.global.user; }
 
     // Bench
     void finishBench();
@@ -121,9 +152,13 @@ private:
     render::GridPipeline pipeline_;
     Microsoft::WRL::ComPtr<IDWriteFactory2> dwrite_;
     std::vector<std::unique_ptr<render::MonitorSurface>> surfaces_;
+    std::vector<std::unique_ptr<render::CellCanvas>> canvases_;
     Tray tray_;
     HICON trayIcon_ = nullptr;
     input::MouseInput mouse_;
+    std::unique_ptr<ui::Gfx> gfx_;
+    std::unique_ptr<ui::TrayFlyout> flyout_;
+    std::unique_ptr<ui::Launcher> launcher_;
 
     // Wallpaper ativo
     std::filesystem::path wallpaperPath_; // pasta ou tema pedido
@@ -133,7 +168,7 @@ private:
     std::string errorText_;               // mostrado num canto do ecrã
     wallpaper::DirectoryWatcher watcher_;
     std::future<LoadJob> pendingLoad_;
-    std::vector<wallpaper::CatalogEntry> catalog_;
+    std::vector<std::wstring> fontCache_;
 
     // Tempo e rato
     wil::unique_handle frameTimer_;
@@ -151,7 +186,7 @@ private:
     bool sessionNotify_ = false;
     int reattachAttempts_ = 0;
 
-    // --screenshot
+    // --screenshot / --ui-screenshot
     bool captureRequested_ = false;
 
     // --bench

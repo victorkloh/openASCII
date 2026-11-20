@@ -76,6 +76,7 @@ fs::path resolveWallpaper(const std::wstring& nameOrPath) {
     if (fs::exists(p, ec)) return fs::absolute(p, ec);
     for (const fs::path& root : wallpaperRoots()) {
         if (fs::exists(root / p / L"wallpaper.toml", ec)) return root / p;
+        if (p.has_extension() && fs::is_regular_file(root / p, ec)) return root / p; // tema: "ripple/themes/x.toml"
     }
     return {};
 }
@@ -130,6 +131,7 @@ LoadResult loadWallpaper(const fs::path& path) {
         for (auto& warning : applyTheme(w.manifest, theme)) w.warnings.push_back(std::move(warning));
         w.label += " / " + toUtf8Path(path.stem());
     }
+    w.baseManifest = w.manifest;
 
     if (w.manifest.mode == WallpaperMode::Script) {
         r.error = "wallpapers do tipo script (Lua) chegam na Fase 4";
@@ -146,7 +148,9 @@ LoadResult loadWallpaper(const fs::path& path) {
 std::vector<CatalogEntry> listWallpapers() {
     std::vector<CatalogEntry> out;
     std::error_code ec;
-    for (const fs::path& root : wallpaperRoots()) {
+    const auto roots = wallpaperRoots();
+    for (size_t r = 0; r < roots.size(); ++r) {
+        const fs::path& root = roots[r];
         if (!fs::is_directory(root, ec)) continue;
         std::vector<fs::path> dirs;
         for (const auto& e : fs::directory_iterator(root, ec)) {
@@ -155,16 +159,93 @@ std::vector<CatalogEntry> listWallpapers() {
         std::sort(dirs.begin(), dirs.end());
         for (const fs::path& dir : dirs) {
             const std::string name = toUtf8Path(dir.filename());
-            out.push_back({name, dir});
+            const bool user = r > 0;
+            out.push_back({name, dir, name, "", dir / L"preview.png", user});
             std::vector<fs::path> themes;
             for (const auto& t : fs::directory_iterator(dir / L"themes", ec)) {
                 if (t.path().extension() == L".toml") themes.push_back(t.path());
             }
             std::sort(themes.begin(), themes.end());
-            for (const fs::path& t : themes) out.push_back({name + " / " + toUtf8Path(t.stem()), t});
+            for (const fs::path& t : themes) {
+                fs::path preview = t;
+                preview.replace_extension(L".png");
+                if (!fs::exists(preview, ec)) preview = dir / L"preview.png";
+                out.push_back({name + " / " + toUtf8Path(t.stem()), t, name, toUtf8Path(t.stem()), preview, user});
+            }
         }
     }
     return out;
+}
+
+std::string wallpaperKey(const fs::path& p) {
+    std::error_code ec;
+    const fs::path abs = fs::weakly_canonical(p, ec);
+    for (const fs::path& root : wallpaperRoots()) {
+        const fs::path rel = fs::relative(abs, fs::weakly_canonical(root, ec), ec);
+        if (!ec && !rel.empty() && rel.native().rfind(L"..", 0) != 0) return toUtf8Path(rel.generic_wstring());
+    }
+    return toUtf8Path(abs.generic_wstring());
+}
+
+fs::path userWallpaperDir() {
+    fs::path dir = wallpaperRoots().back();
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    return dir;
+}
+
+fs::path overridesFile(const std::string& key) {
+    std::string name;
+    for (char c : key) {
+        name += (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' ||
+                 c == '|')
+                    ? '_'
+                    : c;
+    }
+    return userWallpaperDir().parent_path() / L"overrides" / (toWide(name) + L".toml");
+}
+
+Theme loadOverrides(const std::string& key) {
+    std::string text;
+    if (!readFile(overridesFile(key), text)) return {};
+    ThemeResult r = parseTheme(text, false);
+    if (!r.error.empty()) {
+        log::warn(L"Ajustes de {} inválidos ({}); ignorados", toWide(key), toWide(r.error));
+        return {};
+    }
+    return r.theme;
+}
+
+bool saveOverrides(const std::string& key, const Theme& overrides) {
+    const fs::path file = overridesFile(key);
+    std::error_code ec;
+    if (themeIsEmpty(overrides)) {
+        fs::remove(file, ec);
+        return true;
+    }
+    fs::create_directories(file.parent_path(), ec);
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    out << themeToToml(overrides, "Ajustes do utilizador para \"" + key + "\" (gerado pelo AsciiPaper)");
+    return static_cast<bool>(out);
+}
+
+std::string slugify(std::string_view name) {
+    std::string out;
+    bool dash = false;
+    for (unsigned char c : name) {
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+            out += static_cast<char>(c);
+            dash = false;
+        } else if (c >= 'A' && c <= 'Z') {
+            out += static_cast<char>(c - 'A' + 'a');
+            dash = false;
+        } else if (!out.empty() && !dash) {
+            out += '-';
+            dash = true;
+        }
+    }
+    while (!out.empty() && out.back() == '-') out.pop_back();
+    return out.empty() ? std::string("wallpaper") : out;
 }
 
 } // namespace ap::wallpaper

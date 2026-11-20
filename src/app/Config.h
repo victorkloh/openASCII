@@ -14,6 +14,7 @@ struct Config {
     int maxFps = 60;
     bool pauseOnMaximized = true;
     bool pauseOnBatterySaver = true;
+    bool spanMonitors = true; // um só efeito estendido por todos os monitores
 
     static std::filesystem::path path();
     static Config load(); // ficheiro em falta ou inválido = valores por defeito (e um aviso no log)

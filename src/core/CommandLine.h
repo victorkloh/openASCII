@@ -14,6 +14,10 @@ struct Options {
     std::wstring wallpaper; // --wallpaper <pasta>   (Fase 3)
     int benchSeconds = 0;   // --bench <segundos>    (Fase 2)
     std::wstring screenshot; // --screenshot <ficheiro.png>: renderiza fora do ecrã, grava e sai
+    bool openLauncher = false;    // --launcher: abre o launcher ao arrancar
+    std::wstring uiScreenshot;    // --ui-screenshot <png> [página]: desenha o launcher num PNG e sai
+    int uiPage = 0;               //   0 = wallpaper, 1 = novo, 2 = definições
+    std::wstring flyoutScreenshot; // --flyout-screenshot <png>: desenha o menu da bandeja num PNG e sai
 };
 
 struct ParseResult {

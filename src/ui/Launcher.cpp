@@ -142,6 +142,7 @@ void Launcher::selectVariant(const fs::path& path) {
 
 HRESULT Launcher::renderToPng(const std::wstring& path, int page) {
     page_ = static_cast<Page>(std::clamp(page, 0, 2));
+    if (page_ == Page::Settings) contentHeight_ = 0; // desenhar do topo
     refresh();
     if (page_ == Page::New) newName_ = L"Aurora";
     return renderToPngImpl(path, 1080, 720, 1.5f);
@@ -149,7 +150,10 @@ HRESULT Launcher::renderToPng(const std::wstring& path, int page) {
 
 bool Launcher::handleMessage(UINT msg, WPARAM, LPARAM lp, LRESULT& result) {
     if (msg == WM_CLOSE) {
-        ShowWindow(hwnd_, SW_HIDE); // fechar só esconde: a app continua na bandeja
+        // O utilizador fechou a janela: só esconder (a app continua na bandeja). Um WM_CLOSE
+        // numa janela já escondida vem de fora (ex.: "taskkill" sem /f): sair com limpeza.
+        if (IsWindowVisible(hwnd_)) ShowWindow(hwnd_, SW_HIDE);
+        else app_.quit();
         result = 0;
         return true;
     }
@@ -585,8 +589,30 @@ float Launcher::buildSettingsPage(Ui& ui, float x, float y, float w) {
     changed |= ui.toggle(makeId(L"pause-battery"), rect(x - 12, y, rw + 12, 54), L"Pausar na poupança de bateria",
                          L"Quando o Windows liga a poupança de bateria.", s.pauseOnBatterySaver);
     y += 62;
+    // FPS do fundo: automático (cada wallpaper decide) ou fixo para todos.
+    ui.text(rect(x, y, rw, 20), L"FPS do fundo", t.text, smallText(13));
+    ui.text(rect(x, y + 22, rw, 18),
+            s.fps == 0 ? std::format(L"Automático: cada wallpaper decide (agora a {} fps).", app_.currentFps())
+                       : std::wstring(L"Fixo para todos os wallpapers. Menos FPS = menos CPU e GPU."),
+            t.faint, smallText(12));
+    y += 50;
+    {
+        static constexpr int kChoices[] = {0, 15, 24, 30, 45, 60, 90, 120, 144};
+        float cx = x;
+        for (int k = 0; k < static_cast<int>(std::size(kChoices)); ++k) {
+            const int v = kChoices[k];
+            const std::wstring label = v == 0 ? L"auto" : std::to_wstring(v);
+            const float cw = ui.textWidth(label, smallText(12.5f)) + 26;
+            if (ui.chip(makeId(L"fps-chip", k), rect(cx, y, cw, 28), label, s.fps == v) && s.fps != v) {
+                s.fps = v;
+                changed = true;
+            }
+            cx += cw + 6;
+        }
+    }
+    y += 46;
     float maxFps = static_cast<float>(s.maxFps);
-    if (ui.slider(makeId(L"max-fps"), rect(x, y, rw, 40), L"Limite de fotogramas por segundo", maxFps, 15, 144, 1,
+    if (ui.slider(makeId(L"max-fps"), rect(x, y, rw, 40), L"Limite no modo automático", maxFps, 15, 144, 1,
                   std::format(L"{} fps", static_cast<int>(maxFps)))) {
         s.maxFps = static_cast<int>(maxFps);
     }
@@ -597,6 +623,32 @@ float Launcher::buildSettingsPage(Ui& ui, float x, float y, float w) {
     changed |= ui.toggle(makeId(L"autostart"), rect(x - 12, y, rw + 12, 54), L"Iniciar com o Windows",
                          L"Arranca discretamente na bandeja quando inicias sessão.", s.autostart);
     y += 70;
+
+    // Wallpaper Engine / Lively: pausar enquanto o AsciiPaper corre (com os comandos deles).
+    y = section(ui, x, y, w, L"outras apps de wallpaper",
+                L"O Wallpaper Engine e o Lively podem aparecer por baixo do AsciiPaper. As definições deles não mudam.");
+    const std::wstring status = app_.otherAppsStatus();
+    ui.text(rect(x, y, rw, 18), status.empty() ? L"Nenhuma app pausada agora." : status + L" pelo AsciiPaper.",
+            status.empty() ? t.faint : t.accent, smallText(12.5f));
+    y += 28;
+    auto choiceRow = [&](std::wstring_view label, Id id, const std::wstring_view* options, int count, int& value) {
+        ui.text(rect(x, y, 110, 28), label, t.muted, smallText(12.5f));
+        float cx = x + 110;
+        for (int k = 0; k < count; ++k) {
+            const float cw = ui.textWidth(options[k], smallText(12.5f)) + 26;
+            if (ui.chip(makeId(id, k), rect(cx, y, cw, 28), options[k], value == k) && value != k) {
+                value = k;
+                changed = true;
+            }
+            cx += cw + 6;
+        }
+        y += 38;
+    };
+    static constexpr std::wstring_view kOnStart[] = {L"perguntar", L"pausar sempre", L"ignorar"};
+    static constexpr std::wstring_view kOnExit[] = {L"perguntar", L"retomar sempre", L"deixar pausado"};
+    choiceRow(L"Ao arrancar", makeId(L"apps-start"), kOnStart, 3, s.otherAppsOnStart);
+    choiceRow(L"Ao sair", makeId(L"apps-exit"), kOnExit, 3, s.otherAppsOnExit);
+    y += 12;
     if (changed) app_.setSettings(s);
 
     y = section(ui, x, y, w, L"pastas");

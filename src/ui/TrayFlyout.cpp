@@ -61,7 +61,7 @@ float TrayFlyout::layoutHeight() {
     int variants = 0;
     for (const auto& w : items_) variants += w.base == activeBase ? 1 : 0;
     if (variants > 1) y += 38;
-    y += 30 + 48 * 2;                     // "ajustes" + 2 sliders
+    y += 30 + 48 * 2 + 38;                // "ajustes" + 2 sliders + FPS
     if (!app_.lastError().empty()) y += 44;
     y += 16 + 36 + kPad;                  // divisória + ações
     return y;
@@ -116,6 +116,13 @@ bool TrayFlyout::handleMessage(UINT msg, WPARAM wp, LPARAM, LRESULT& result) {
     }
     if (msg == WM_KEYDOWN && wp == VK_ESCAPE) {
         hide();
+        result = 0;
+        return true;
+    }
+    if (msg == WM_CLOSE) {
+        // Como no launcher: escondido = pedido de fora (taskkill) para sair.
+        if (isVisible()) hide();
+        else app_.quit();
         result = 0;
         return true;
     }
@@ -236,6 +243,27 @@ void TrayFlyout::build(Ui& ui, float w, float) {
         y += 96;
     }
     if (changed || ui.sliderReleased()) editor_.apply(app_, ui.sliderReleased());
+
+    // FPS do fundo (global): automático ou fixo.
+    {
+        GlobalSettings gs = app_.settings();
+        TextStyle ls;
+        ls.size = 12.5f;
+        ui.text(rect(kPad, y, 40, 28), L"FPS", t.muted, ls);
+        static constexpr int kChoices[] = {0, 15, 30, 60, 120};
+        float cx = kPad + 40;
+        for (int k = 0; k < static_cast<int>(std::size(kChoices)); ++k) {
+            const int v = kChoices[k];
+            const std::wstring label = v == 0 ? L"auto" : std::to_wstring(v);
+            const float cw = ui.textWidth(label, ls) + 22;
+            if (ui.chip(makeId(L"flyout-fps", k), rect(cx, y, cw, 28), label, gs.fps == v) && gs.fps != v) {
+                gs.fps = v;
+                app_.setSettings(gs);
+            }
+            cx += cw + 5;
+        }
+        y += 38;
+    }
 
     // ---- Erro do wallpaper ativo ----
     const std::wstring err = app_.lastError();

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(AsciiPaper
-    VERSION 0.3.0
+    VERSION 0.4.0
     DESCRIPTION "Motor de wallpapers ASCII reativos para Windows"
     LANGUAGES CXX RC)
 
@@ -66,6 +66,7 @@ add_executable(asciipaper WIN32
     src/app/Config.cpp
     src/app/Tray.cpp
     src/desktop/MonitorManager.cpp
+    src/desktop/OtherWallpaperApps.cpp
     src/desktop/PauseManager.cpp
     src/desktop/Wallpaper.cpp
     src/desktop/WorkerW.cpp
@@ -73,10 +74,12 @@ add_executable(asciipaper WIN32
     src/input/MouseInput.cpp
     src/render/Device.cpp
     src/render/GlyphAtlas.cpp
+    src/render/GpuTimer.cpp
     src/render/GridRenderer.cpp
     src/render/MonitorSurface.cpp
     src/render/Screenshot.cpp
     src/render/ShaderCompiler.cpp
+    src/ui/ConfirmDialog.cpp
     src/ui/Gfx.cpp
     src/ui/Launcher.cpp
     src/ui/TrayFlyout.cpp

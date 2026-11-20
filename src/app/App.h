@@ -5,10 +5,12 @@
 #include <windows.h>
 #include <dwrite_2.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <future>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <wil/resource.h>
@@ -16,10 +18,12 @@
 #include "app/Config.h"
 #include "app/Tray.h"
 #include "core/CommandLine.h"
+#include "desktop/OtherWallpaperApps.h"
 #include "desktop/PauseManager.h"
 #include "desktop/WorkerW.h"
 #include "input/MouseInput.h"
 #include "render/Device.h"
+#include "render/GpuTimer.h"
 #include "render/GridRenderer.h"
 #include "render/MonitorSurface.h"
 #include "ui/AppControl.h"
@@ -31,6 +35,7 @@ namespace ap::ui {
 class Gfx;
 class TrayFlyout;
 class Launcher;
+class ConfirmDialog;
 } // namespace ap::ui
 
 namespace ap::app {
@@ -71,8 +76,10 @@ public:
     ui::GlobalSettings settings() const override;
     void setSettings(const ui::GlobalSettings& settings) override;
     std::wstring lastError() const override;
+    int currentFps() const override { return std::clamp(settings_.fps, 1, 240); }
+    std::wstring otherAppsStatus() const override;
     void openLauncher() override;
-    void quit() override { PostQuitMessage(0); }
+    void quit() override; // pode perguntar se retoma o Wallpaper Engine/Lively antes de sair
 
 private:
     using WinEventHook = wil::unique_any<HWINEVENTHOOK, decltype(&::UnhookWinEvent), ::UnhookWinEvent>;
@@ -101,6 +108,12 @@ private:
     void loadWallpaperAsync(const std::filesystem::path& path);
     void applyLoadJob(LoadJob job);
     void onManifestChanged(); // fps, atlas, canvas
+    int effectiveFps() const; // FPS do fundo: o fixo das definições, ou o do wallpaper
+
+    // Outras apps de wallpaper
+    void checkOtherApps();
+    void suspendApps(const std::vector<desktop::OtherWallpaperApp>& apps);
+    void resumeSuspendedApps();
     std::filesystem::path initialWallpaperPath() const;
 
     // Desktop
@@ -120,7 +133,8 @@ private:
     void renderFrame();
     void renderAllNow();                              // um frame já, em todos (mesmo em pausa)
     void computeCanvas(render::CellCanvas& canvas, double time, double dt);
-    HRESULT drawSurface(render::MonitorSurface& s);
+    HRESULT drawSurface(render::MonitorSurface& s, bool present = true);
+    HRESULT presentSurface(render::MonitorSurface& s);
     wallpaper::FrameConstants makeFrame(const render::CellCanvas& canvas, const render::MonitorSurface& ref,
                                         double time, double dt) const;
     void drawError(render::CellCanvas& canvas, const render::MonitorSurface& ref);
@@ -159,6 +173,9 @@ private:
     std::unique_ptr<ui::Gfx> gfx_;
     std::unique_ptr<ui::TrayFlyout> flyout_;
     std::unique_ptr<ui::Launcher> launcher_;
+    std::unique_ptr<ui::ConfirmDialog> dialog_;
+    std::vector<desktop::OtherWallpaperApp> suspendedApps_; // o que pausámos (para retomar)
+    bool quitting_ = false;
 
     // Wallpaper ativo
     std::filesystem::path wallpaperPath_; // pasta ou tema pedido
@@ -180,6 +197,13 @@ private:
     uint32_t frameIndex_ = 0;
     POINT lastCursor_{};
     float mouseVelX_ = 0.0f, mouseVelY_ = 0.0f; // px/s suavizados
+    // Por canvas: a "presença" suave do rato e a última posição em que esteve no fundo.
+    struct MouseTrack {
+        float presence = 0.0f;
+        POINT last{};
+        bool inside = false;
+    };
+    std::unordered_map<const render::CellCanvas*, MouseTrack> mouseTracks_;
 
     std::vector<WinEventHook> winEventHooks_;
     PowerNotify batterySaverNotify_;
@@ -194,6 +218,18 @@ private:
     std::vector<double> frameTimesMs_;
     LONGLONG benchStartQpc_ = 0;
     ULONGLONG benchStartCpu100ns_ = 0;
+
+    // Diagnóstico de desempenho: o que o loop faz (acordar, mensagens, engasgos, Present).
+    struct PerfCounters {
+        uint64_t wakeups = 0, messages = 0, frames = 0, hitches = 0;
+        double maxGapMs = 0, maxRenderMs = 0, maxPresentMs = 0, sumPresentMs = 0, skippedPresents = 0;
+        LONGLONG lastFrameQpc = 0, windowStart = 0;
+    };
+    PerfCounters perf_;      // janela de 5 s (log com --verbose)
+    PerfCounters benchPerf_; // o --bench inteiro
+    render::GpuTimer gpuTimer_;
+    std::vector<double> gpuMs_;
+    void logPerfWindow();
 };
 
 } // namespace ap::app

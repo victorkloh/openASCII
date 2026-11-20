@@ -36,6 +36,9 @@ Config Config::load() {
         c.pauseOnMaximized = t["pause_on_maximized"].value_or(c.pauseOnMaximized);
         c.pauseOnBatterySaver = t["pause_on_battery_saver"].value_or(c.pauseOnBatterySaver);
         c.spanMonitors = t["span_monitors"].value_or(c.spanMonitors);
+        c.fps = std::clamp(static_cast<int>(t["fps"].value_or(int64_t{0})), 0, 240);
+        c.otherAppsOnStart = t["other_apps_on_start"].value_or(c.otherAppsOnStart);
+        c.otherAppsOnExit = t["other_apps_on_exit"].value_or(c.otherAppsOnExit);
     } catch (const toml::parse_error& e) {
         log::warn(L"config.toml inválido (linha {}): {}; a usar valores por defeito", e.source().begin.line,
                   std::wstring(e.description().begin(), e.description().end()));
@@ -54,11 +57,17 @@ bool Config::save() const {
         {"pause_on_maximized", pauseOnMaximized},
         {"pause_on_battery_saver", pauseOnBatterySaver},
         {"span_monitors", spanMonitors},
+        {"fps", fps},
+        {"other_apps_on_start", otherAppsOnStart},
+        {"other_apps_on_exit", otherAppsOnExit},
     };
     std::ofstream out(file, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out << "# Configuração do AsciiPaper (reescrita pela app ao escolher um wallpaper na tray)\n"
-        << "# interaction: \"desktop_only\" (só reage sobre o desktop) ou \"always\"\n\n"
+        << "# interaction: \"desktop_only\" (só reage sobre o desktop) ou \"always\"\n"
+        << "# fps: 0 = automático (cada wallpaper decide); outro valor = FPS fixo para todos\n"
+        << "# other_apps_on_start: \"ask\" | \"pause\" | \"ignore\"  (Wallpaper Engine, Lively)\n"
+        << "# other_apps_on_exit:  \"ask\" | \"resume\" | \"keep\"\n\n"
         << t << "\n";
     return static_cast<bool>(out);
 }

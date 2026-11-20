@@ -27,6 +27,9 @@ struct GlobalSettings {
     bool pauseOnBatterySaver = true;
     bool autostart = false;
     int maxFps = 60;
+    int fps = 0;              // FPS do fundo: 0 = automático
+    int otherAppsOnStart = 0; // 0 perguntar, 1 pausar sempre, 2 ignorar
+    int otherAppsOnExit = 0;  // 0 perguntar, 1 retomar sempre, 2 deixar pausado
 };
 
 class AppControl {
@@ -60,6 +63,8 @@ public:
     virtual GlobalSettings settings() const = 0;
     virtual void setSettings(const GlobalSettings& settings) = 0;
     virtual std::wstring lastError() const = 0; // erro do wallpaper ativo (vazio = ok)
+    virtual int currentFps() const = 0;         // FPS a que o fundo está a desenhar agora
+    virtual std::wstring otherAppsStatus() const = 0; // ex.: "Wallpaper Engine pausado" (vazio = nada)
 
     // Janelas
     virtual void openLauncher() = 0;

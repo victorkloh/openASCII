@@ -6,6 +6,7 @@
 #include "desktop/Wallpaper.h"
 #include "render/Screenshot.h"
 #include "resource.h"
+#include "ui/ConfirmDialog.h"
 #include "ui/Gfx.h"
 #include "ui/Launcher.h"
 #include "ui/TrayFlyout.h"
@@ -134,7 +135,7 @@ CellOut cell(CellIn i)
 {
     // i.world e mouse.world estão em unidades de mundo: mudar a resolução da grelha
     // não muda o tamanho do efeito.
-    float2 center = mouse.inside ? mouse.world : worldSize * 0.5;
+    float2 center = lerp(worldSize * 0.5, mouse.world, mouse.presence); // transição suave
     float d = length(i.world - center);
     float v = sin(d * 0.5 - time * 3.0 * param("speed")) * exp(-d * 0.03);
 
@@ -212,7 +213,6 @@ bool App::init() {
     if (FAILED(device_.create()) || FAILED(pipeline_.create(device_.device()))) {
         return false;
     }
-    mouse_.create(instance_);
 
     // A interface (menu da bandeja, launcher) é desenhada com Direct2D, sob pedido.
     gfx_ = std::make_unique<ui::Gfx>();
@@ -222,8 +222,10 @@ bool App::init() {
     } else {
         flyout_ = std::make_unique<ui::TrayFlyout>(*gfx_, *this);
         launcher_ = std::make_unique<ui::Launcher>(*gfx_, *this);
+        dialog_ = std::make_unique<ui::ConfirmDialog>(*gfx_, *this);
         flyout_->create(instance_);
         launcher_->create(instance_);
+        dialog_->create(instance_);
     }
 
     // O wallpaper é carregado e compilado ANTES de criar as janelas: assim o primeiro
@@ -234,7 +236,16 @@ bool App::init() {
     // Modos que só desenham a interface num PNG e saem.
     if (!options_.uiScreenshot.empty() || !options_.flyoutScreenshot.empty()) {
         HRESULT hr = E_FAIL;
-        if (gfx_ && !options_.uiScreenshot.empty()) {
+        if (gfx_ && !options_.uiScreenshot.empty() && options_.uiPage == 3) {
+            // Página 3: a pergunta sobre o Wallpaper Engine (exemplo, sem a mostrar no ecrã).
+            dialog_->ask(L"Outra app de wallpaper está ativa",
+                         L"O Wallpaper Engine também desenha por trás dos ícones e pode aparecer por baixo do "
+                         L"AsciiPaper. Pausá-lo enquanto o AsciiPaper estiver a correr?\n\nAs definições e os "
+                         L"wallpapers dele não mudam; volta quando saíres.",
+                         L"Pausar", L"Agora não", ui::accentFromPalette(wallpaper_.manifest.palette), nullptr);
+            ShowWindow(dialog_->hwnd(), SW_HIDE);
+            hr = dialog_->renderToPng(options_.uiScreenshot);
+        } else if (gfx_ && !options_.uiScreenshot.empty()) {
             hr = launcher_->renderToPng(options_.uiScreenshot, options_.uiPage);
         }
         if (gfx_ && !options_.flyoutScreenshot.empty()) hr = flyout_->renderToPng(options_.flyoutScreenshot);
@@ -293,6 +304,7 @@ bool App::init() {
         log::warn(L"Desktop ainda não está pronto; a tentar de novo");
         scheduleReattach(1000);
     }
+    checkOtherApps();
     if (options_.openLauncher) openLauncher();
     return true;
 }
@@ -303,9 +315,9 @@ void App::shutdown() {
     }
     exiting_ = true;
     stopFrameTimer();
-    mouse_.setEnabled(false);
     watcher_.stop();
     if (pendingLoad_.valid()) pendingLoad_.wait();
+    dialog_.reset();
     launcher_.reset();
     flyout_.reset();
     gfx_.reset();
@@ -326,6 +338,9 @@ void App::shutdown() {
         desktop::restoreWallpaper(g_originalWallpaper);
         log::info(L"Wallpaper original reposto");
     }
+    // Por fim, o Wallpaper Engine/Lively que pausámos voltam (a menos que o utilizador
+    // tenha escolhido deixá-los pausados).
+    if (config_.otherAppsOnExit != "keep") resumeSuspendedApps();
     if (controller_) {
         DestroyWindow(controller_);
         controller_ = nullptr;
@@ -383,6 +398,8 @@ int App::run() {
             handles[count++] = watcher_.event();
         }
         const DWORD r = MsgWaitForMultipleObjectsEx(count, handles, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        ++perf_.wakeups;
+        ++benchPerf_.wakeups;
         const int signaled = r < WAIT_OBJECT_0 + count ? static_cast<int>(r - WAIT_OBJECT_0) : -2;
         if (signaled >= 0 && signaled == timerIndex) {
             frameTimerArmed_ = false;
@@ -402,14 +419,41 @@ int App::run() {
                 shutdown();
                 return static_cast<int>(msg.wParam);
             }
+            ++perf_.messages;
+            ++benchPerf_.messages;
+            const LONGLONG t0 = qpcNow();
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
+            // Diagnóstico: qualquer mensagem que prenda o thread mais de 25 ms aparece no log.
+            const double ms = (qpcNow() - t0) * 1000.0 / qpcFrequency_;
+            if (ms > 25.0) {
+                log::warn(L"Mensagem lenta: 0x{:04X} (wParam {}) para {} demorou {:.1f} ms", msg.message,
+                          static_cast<unsigned long long>(msg.wParam), win::className(msg.hwnd), ms);
+            }
         }
     }
 }
 
+void App::logPerfWindow() {
+    const LONGLONG t = qpcNow();
+    if (perf_.windowStart == 0) {
+        perf_.windowStart = t;
+        return;
+    }
+    const double secs = (t - perf_.windowStart) / static_cast<double>(qpcFrequency_);
+    if (secs < (benchmarking_ ? 1.0 : 5.0)) return; // no bench, de segundo a segundo
+
+    log::info(L"perf: {:.1f} fps, loop acordou {:.0f}/s, mensagens {:.0f}/s, render máx {:.2f} ms, "
+               L"Present máx {:.2f} ms (médio {:.3f}), maior intervalo {:.1f} ms, engasgos {}",
+               perf_.frames / secs, perf_.wakeups / secs, perf_.messages / secs, perf_.maxRenderMs,
+               perf_.maxPresentMs, perf_.frames ? perf_.sumPresentMs / perf_.frames : 0.0, perf_.maxGapMs,
+               perf_.hitches);
+    perf_ = PerfCounters{};
+    perf_.windowStart = t;
+}
+
 void App::armFrameTimer(bool restart) {
-    const int fps = std::clamp(settings_.fps, 1, settings_.maxFps);
+    const int fps = std::clamp(settings_.fps, 1, 240);
     const LONGLONG period = qpcFrequency_ / fps;
     const LONGLONG t = qpcNow();
     if (restart || nextFrame_ == 0) {
@@ -544,7 +588,7 @@ void App::applyLoadJob(LoadJob job) {
 
 void App::onManifestChanged() {
     if (!hasWallpaper_) return;
-    settings_.fps = wallpaper_.manifest.fps;
+    settings_.fps = effectiveFps();
     prepareAllSurfaces();
     rebuildCanvases();
     renderAllNow();
@@ -749,7 +793,10 @@ ui::GlobalSettings App::settings() const {
     s.pauseOnMaximized = config_.pauseOnMaximized;
     s.pauseOnBatterySaver = config_.pauseOnBatterySaver;
     s.maxFps = config_.maxFps;
+    s.fps = config_.fps;
     s.autostart = autostartEnabled();
+    s.otherAppsOnStart = config_.otherAppsOnStart == "pause" ? 1 : config_.otherAppsOnStart == "ignore" ? 2 : 0;
+    s.otherAppsOnExit = config_.otherAppsOnExit == "resume" ? 1 : config_.otherAppsOnExit == "keep" ? 2 : 0;
     return s;
 }
 
@@ -760,10 +807,17 @@ void App::setSettings(const ui::GlobalSettings& s) {
     config_.pauseOnMaximized = s.pauseOnMaximized;
     config_.pauseOnBatterySaver = s.pauseOnBatterySaver;
     config_.maxFps = std::clamp(s.maxFps, 1, 240);
+    config_.fps = std::clamp(s.fps, 0, 240);
+    static const char* onStart[] = {"ask", "pause", "ignore"};
+    static const char* onExit[] = {"ask", "resume", "keep"};
+    config_.otherAppsOnStart = onStart[std::clamp(s.otherAppsOnStart, 0, 2)];
+    config_.otherAppsOnExit = onExit[std::clamp(s.otherAppsOnExit, 0, 2)];
     config_.save();
     if (s.autostart != autostartEnabled()) setAutostart(s.autostart);
 
     settings_.maxFps = config_.maxFps;
+    settings_.fps = effectiveFps();
+    stopFrameTimer(); // o updatePause() abaixo volta a armar o timer com o novo ritmo
     settings_.pause.pauseOnMaximized = config_.pauseOnMaximized;
     settings_.pause.pauseOnBatterySaver = config_.pauseOnBatterySaver;
     mouse_.mode = s.interactionAlways ? input::InteractionMode::Always : input::InteractionMode::DesktopOnly;
@@ -775,6 +829,77 @@ void App::setSettings(const ui::GlobalSettings& s) {
 }
 
 std::wstring App::lastError() const { return widen(errorText_); }
+
+int App::effectiveFps() const {
+    // Um FPS fixo escolhido pelo utilizador vale sempre; o limite aplica-se ao automático.
+    if (config_.fps > 0) return std::clamp(config_.fps, 1, 240);
+    const int wanted = hasWallpaper_ ? wallpaper_.manifest.fps : 30;
+    return std::clamp(wanted, 1, std::max(1, config_.maxFps));
+}
+
+std::wstring App::otherAppsStatus() const {
+    return suspendedApps_.empty() ? L"" : desktop::describeApps(suspendedApps_) + L" em pausa";
+}
+
+void App::suspendApps(const std::vector<desktop::OtherWallpaperApp>& apps) {
+    for (const auto& a : apps) {
+        if (desktop::suspendOtherApp(a)) suspendedApps_.push_back(a);
+    }
+    renderAllNow(); // um frame nosso por cima do que a outra app deixou
+    if (flyout_) flyout_->refresh();
+}
+
+void App::resumeSuspendedApps() {
+    for (const auto& a : suspendedApps_) desktop::resumeOtherApp(a);
+    suspendedApps_.clear();
+}
+
+void App::checkOtherApps() {
+    const auto apps = desktop::detectOtherWallpaperApps();
+    if (apps.empty()) return;
+    const std::wstring names = desktop::describeApps(apps);
+    log::info(L"Outra app de wallpaper a correr: {} (política: {})", names, widen(config_.otherAppsOnStart));
+    if (config_.otherAppsOnStart == "ignore") return;
+    if (config_.otherAppsOnStart == "pause" || !dialog_) {
+        if (config_.otherAppsOnStart == "pause") suspendApps(apps);
+        return;
+    }
+    dialog_->ask(L"Outra app de wallpaper está ativa",
+                 std::format(L"O {} também desenha por trás dos ícones e pode aparecer por baixo do AsciiPaper. "
+                             L"Pausá-lo enquanto o AsciiPaper estiver a correr?\n\nAs definições e os wallpapers "
+                             L"dele não mudam; volta quando saíres.",
+                             names),
+                 L"Pausar", L"Agora não", hasWallpaper_ ? ui::accentFromPalette(wallpaper_.manifest.palette) : Rgba8{},
+                 [this, apps](bool accepted, bool remember) {
+                     if (accepted) suspendApps(apps);
+                     if (remember) {
+                         config_.otherAppsOnStart = accepted ? "pause" : "ignore";
+                         config_.save();
+                     }
+                 });
+}
+
+void App::quit() {
+    if (quitting_) return;
+    if (!suspendedApps_.empty() && config_.otherAppsOnExit == "ask" && dialog_) {
+        quitting_ = true;
+        const std::wstring names = desktop::describeApps(suspendedApps_);
+        dialog_->ask(L"Retomar o " + names + L"?",
+                     L"O AsciiPaper vai fechar. Queres que o " + names + L" volte a correr como estava?",
+                     L"Retomar", L"Deixar pausado",
+                     hasWallpaper_ ? ui::accentFromPalette(wallpaper_.manifest.palette) : Rgba8{},
+                     [this](bool accepted, bool remember) {
+                         if (!accepted) suspendedApps_.clear(); // não retomar no shutdown()
+                         if (remember) {
+                             config_.otherAppsOnExit = accepted ? "resume" : "keep";
+                             config_.save();
+                         }
+                         PostQuitMessage(0); // o shutdown() retoma o que ficou em suspendedApps_
+                     });
+        return;
+    }
+    PostQuitMessage(0);
+}
 
 void App::openLauncher() {
     if (launcher_) launcher_->show();
@@ -835,6 +960,7 @@ void App::rebuildCanvases() {
     const size_t count = span ? 1 : ready.size();
     if (canvases_.size() != count) {
         canvases_.clear();
+        mouseTracks_.clear();
         for (size_t i = 0; i < count; ++i) canvases_.push_back(std::make_unique<render::CellCanvas>());
     }
     if (span) {
@@ -878,19 +1004,17 @@ wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const
 
     auto toCellX = [&](LONG x) { return static_cast<float>(x - c.originPx.x) / cw; };
     auto toCellY = [&](LONG y) { return static_cast<float>(y - c.originPx.y) / ch; };
-    const POINT p = mouse_.cursor;
-    bool onCanvas = false;
-    for (const auto& s : surfaces_) {
-        if (s->canvas != &canvas) continue;
-        const Rect& r = s->monitor.rect;
-        onCanvas = onCanvas || (p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom);
-    }
-    const bool inside = onCanvas && mouse_.overDesktop;
-    f.mouseX = toCellX(p.x);
-    f.mouseY = toCellY(p.y);
-    f.mouseVX = mouseVelX_ / cw;
-    f.mouseVY = mouseVelY_ / ch;
+    // Quando o rato sai do fundo, os efeitos ficam na última posição e desvanecem com a
+    // "presença" (em vez de saltarem para onde o cursor está, por cima de outra janela).
+    MouseTrack track;
+    if (auto it = mouseTracks_.find(&canvas); it != mouseTracks_.end()) track = it->second;
+    const bool inside = track.inside;
+    f.mouseX = toCellX(track.last.x);
+    f.mouseY = toCellY(track.last.y);
+    f.mouseVX = inside ? mouseVelX_ / cw : 0.0f;
+    f.mouseVY = inside ? mouseVelY_ / ch : 0.0f;
     f.inside = inside ? 1u : 0u;
+    f.mousePresence = track.presence;
     f.buttons = inside ? mouse_.buttons : 0u;
     f.scroll = inside ? mouse_.scroll : 0.0f;
     if (mouse_.clickQpc != 0) {
@@ -921,6 +1045,7 @@ wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const
     f.worldPerCellX = cw / unitPx;
     f.worldPerCellY = ch / unitPx;
     f.monitorCount = static_cast<uint32_t>(std::min<size_t>(c.monitorCells.size(), 8));
+    f.primaryIndex = static_cast<uint32_t>(std::clamp(c.reference, 0, static_cast<int>(f.monitorCount) - 1));
     for (uint32_t i = 0; i < f.monitorCount; ++i) {
         const Rect& r = c.monitorCells[i];
         f.monitors[i][0] = r.left;
@@ -928,6 +1053,15 @@ wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const
         f.monitors[i][2] = r.right;
         f.monitors[i][3] = r.bottom;
     }
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    f.localHour = st.wHour;
+    f.localMinute = st.wMinute;
+    f.localSecond = st.wSecond + st.wMilliseconds / 1000.0f;
+    f.year = st.wYear;
+    f.month = st.wMonth;
+    f.day = st.wDay;
+    f.weekday = st.wDayOfWeek;
     return f;
 }
 
@@ -960,7 +1094,7 @@ void App::computeCanvas(render::CellCanvas& canvas, double time, double dt) {
     if (!errorText_.empty()) drawError(canvas, *ref);
 }
 
-HRESULT App::drawSurface(render::MonitorSurface& s) {
+HRESULT App::drawSurface(render::MonitorSurface& s, bool present) {
     if (!s.hasSwapChain() || !s.canvas || !s.atlas.valid()) return S_OK;
     auto* ctx = device_.context();
     s.grid.draw(device_.device(), ctx, pipeline_, s.rtv(), s.atlas, *s.canvas, s.monitor.rect,
@@ -977,12 +1111,24 @@ HRESULT App::drawSurface(render::MonitorSurface& s) {
         }
         PostQuitMessage(SUCCEEDED(hr) ? 0 : 1);
     }
-    return s.present();
+    return present ? presentSurface(s) : S_OK;
+}
+
+HRESULT App::presentSurface(render::MonitorSurface& s) {
+    if (!s.hasSwapChain() || !s.canvas || !s.atlas.valid()) return S_OK;
+    const LONGLONG t0 = qpcNow();
+    const HRESULT hr = s.present();
+    const double ms = (qpcNow() - t0) * 1000.0 / qpcFrequency_;
+    for (PerfCounters* p : {&perf_, &benchPerf_}) {
+        p->maxPresentMs = std::max(p->maxPresentMs, ms);
+        p->sumPresentMs += ms;
+    }
+    return hr;
 }
 
 void App::renderAllNow() {
     if (canvases_.empty()) return;
-    const double dt = 1.0 / std::clamp(settings_.fps, 1, settings_.maxFps);
+    const double dt = 1.0 / std::clamp(settings_.fps, 1, 240);
     const double t = now();
     for (auto& c : canvases_) computeCanvas(*c, t, dt);
     for (auto& s : surfaces_) {
@@ -997,6 +1143,23 @@ void App::renderAllNow() {
 void App::renderFrame() {
     const LONGLONG start = qpcNow();
     const double t = qpcToSeconds(start);
+    {
+        // Engasgos: um frame que chegou bem depois do previsto.
+        const double periodMs = 1000.0 / std::clamp(settings_.fps, 1, 240);
+        for (PerfCounters* p : {&perf_, &benchPerf_}) {
+            if (p->lastFrameQpc != 0) {
+                const double gap = (start - p->lastFrameQpc) * 1000.0 / qpcFrequency_;
+                p->maxGapMs = std::max(p->maxGapMs, gap);
+                if (gap > periodMs * 1.5) ++p->hitches;
+            }
+            p->lastFrameQpc = start;
+            ++p->frames;
+        }
+    }
+    if (benchmarking_) {
+        gpuTimer_.collect(device_.context(), gpuMs_);
+        gpuTimer_.begin(device_.device(), device_.context());
+    }
     double dt = lastFrameTime_ > 0.0 ? t - lastFrameTime_ : 1.0 / settings_.fps;
     dt = std::clamp(dt, 0.0005, 0.1); // depois de uma pausa não dar um salto enorme na simulação
     lastFrameTime_ = t;
@@ -1009,6 +1172,23 @@ void App::renderFrame() {
     mouseVelX_ += (vx - mouseVelX_) * k;
     mouseVelY_ += (vy - mouseVelY_) * k;
     lastCursor_ = mouse_.cursor;
+
+    // Presença do rato em cada canvas: entra depressa (~0.1 s), sai devagar (~0.5 s).
+    for (auto& cv : canvases_) {
+        const POINT p = mouse_.cursor;
+        bool onCanvas = false;
+        for (const auto& s : surfaces_) {
+            if (s->canvas != cv.get()) continue;
+            const Rect& r = s->monitor.rect;
+            onCanvas = onCanvas || (p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom);
+        }
+        MouseTrack& tr = mouseTracks_[cv.get()];
+        tr.inside = onCanvas && mouse_.overDesktop;
+        if (tr.inside) tr.last = p;
+        const float target = tr.inside ? 1.0f : 0.0f;
+        const float rate = tr.inside ? 10.0f : 2.5f;
+        tr.presence += (target - tr.presence) * (1.0f - std::exp(-static_cast<float>(dt) * rate));
+    }
 
     if (options_.windowed) {
         // Em janela, o "monitor" é a área cliente, onde quer que a janela esteja.
@@ -1034,16 +1214,23 @@ void App::renderFrame() {
     }
     for (auto& s : surfaces_) {
         if (any(s->pause) || !s->hasSwapChain()) continue;
-        const HRESULT hr = drawSurface(*s);
+        drawSurface(*s, false);
+    }
+    if (benchmarking_) gpuTimer_.end(device_.context()); // antes do Present: só o trabalho da GPU
+    for (auto& s : surfaces_) {
+        if (any(s->pause) || !s->hasSwapChain()) continue;
+        const HRESULT hr = presentSurface(*s);
         if (render::isDeviceLost(hr)) {
             handleDeviceLost(hr);
             return;
         }
     }
     ++frameIndex_;
-    if (benchmarking_) {
-        frameTimesMs_.push_back((qpcNow() - start) * 1000.0 / qpcFrequency_);
-    }
+    const double renderMs = (qpcNow() - start) * 1000.0 / qpcFrequency_;
+    perf_.maxRenderMs = std::max(perf_.maxRenderMs, renderMs);
+    benchPerf_.maxRenderMs = std::max(benchPerf_.maxRenderMs, renderMs);
+    if (benchmarking_) frameTimesMs_.push_back(renderMs);
+    if (options_.verbose || benchmarking_) logPerfWindow();
 }
 
 // ---------------------------------------------------------------------------
@@ -1255,7 +1442,10 @@ void App::updatePause() {
     pause_.rules = settings_.pause;
     std::vector<MonitorCoverage> coverage(monitors.size());
     if (!options_.windowed) {
+        const LONGLONG t0 = qpcNow();
         coverage = pause_.scan(monitors);
+        const double ms = (qpcNow() - t0) * 1000.0 / qpcFrequency_;
+        if (ms > 10.0) log::warn(L"Verificar janelas (pausas) demorou {:.1f} ms", ms);
     }
 
     bool windowPause = false;
@@ -1277,9 +1467,7 @@ void App::updatePause() {
     if (resumedAny) renderAllNow(); // frame fresco logo, em vez de esperar pelo timer
 
     const bool active = anyActive();
-    // Rato: só registamos o Raw Input quando há algo a desenhar. Em pausa o sistema deixa
-    // de nos acordar a cada movimento do rato.
-    mouse_.setEnabled(active);
+    // O rato é lido em renderFrame(): em pausa não há frames, logo nada é lido (0% de CPU).
     // Algumas mudanças (ex.: Win+↓ numa janela maximizada) não geram nenhum dos eventos
     // que ouvimos, por isso reavaliamos 1x por segundo enquanto houver algo a desenhar
     // ou uma pausa causada por uma janela. Bloqueio/suspensão = sem timers nenhuns.
@@ -1335,15 +1523,27 @@ void App::finishBench() {
         cells += std::format(L"\n  canvas: {}x{} ({} células)", c->layout().cols, c->layout().rows,
                              c->layout().cellCount());
     }
+    gpuTimer_.collect(device_.context(), gpuMs_);
+    std::vector<double> g = gpuMs_;
+    std::sort(g.begin(), g.end());
+    const double gpuAvg = g.empty() ? 0.0 : std::accumulate(g.begin(), g.end(), 0.0) / g.size();
+    const double gpuMax = g.empty() ? 0.0 : g.back();
+    const PerfCounters& bp = benchPerf_;
     const std::wstring report = std::format(
         L"\n=== AsciiPaper --bench ({}) ===\n"
         L"Wallpaper: {}{}\n"
         L"Frames: {} em {:.1f} s ({:.1f} fps, alvo {})\n"
-        L"Frame time (CPU: compute + draw + Present): médio {:.3f} ms, p99 {:.3f} ms\n"
+        L"Frame time (CPU: compute + draw + Present): médio {:.3f} ms, p99 {:.3f} ms, máx {:.2f} ms\n"
+        L"GPU por frame: médio {:.3f} ms, máx {:.3f} ms ({} amostras)\n"
+        L"Present: médio {:.3f} ms, máx {:.2f} ms\n"
+        L"Engasgos (frame > 1.5x o período): {}  |  maior intervalo entre frames: {:.1f} ms\n"
+        L"Loop: acordou {:.0f}/s, processou {:.0f} mensagens/s\n"
         L"CPU do processo: {:.2f}% (de {} threads lógicas)\n"
         L"RAM: working set {:.1f} MB, private bytes {:.1f} MB\n",
         ASCIIPAPER_VERSION_WSTR, widen(wallpaper_.label), cells, t.size(), wall, t.size() / wall,
-        std::clamp(settings_.fps, 1, settings_.maxFps), avg, p99, cpuPercent, si.dwNumberOfProcessors,
+        std::clamp(settings_.fps, 1, 240), avg, p99, bp.maxRenderMs, gpuAvg, gpuMax, g.size(),
+        bp.frames ? bp.sumPresentMs / bp.frames : 0.0, bp.maxPresentMs, bp.hitches, bp.maxGapMs,
+        bp.wakeups / wall, bp.messages / wall, cpuPercent, si.dwNumberOfProcessors,
         mem.WorkingSetSize / (1024.0 * 1024.0), mem.PrivateUsage / (1024.0 * 1024.0));
     log::info(L"{}", report);
     log::printConsole(report);

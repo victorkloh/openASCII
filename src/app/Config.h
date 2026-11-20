@@ -15,6 +15,10 @@ struct Config {
     bool pauseOnMaximized = true;
     bool pauseOnBatterySaver = true;
     bool spanMonitors = true; // um só efeito estendido por todos os monitores
+    int fps = 0;              // FPS do fundo: 0 = automático (o que cada wallpaper pede)
+    // Outras apps de wallpaper (Wallpaper Engine, Lively):
+    std::string otherAppsOnStart = "ask"; // "ask" | "pause" | "ignore"
+    std::string otherAppsOnExit = "ask";  // "ask" | "resume" | "keep"
 
     static std::filesystem::path path();
     static Config load(); // ficheiro em falta ou inválido = valores por defeito (e um aviso no log)

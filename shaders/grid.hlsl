@@ -1,17 +1,22 @@
-// grid.hlsl — render final: transforma o cell buffer em píxeis.
+// grid.hlsl — render final: transforma o canvas de células em píxeis de UM monitor.
 //
 // Um único triângulo que cobre o ecrã inteiro (mais barato que dois triângulos: não há
 // diagonal a meio onde a GPU processa píxeis duas vezes). Para cada píxel, o pixel shader
-// descobre em que célula está, vai buscar a cobertura do glifo ao atlas e mistura fg/bg.
+// descobre em que célula DO MONITOR está, que célula DO CANVAS ela mostra (no modo estendido
+// o canvas cobre todos os monitores), vai buscar a cobertura do glifo ao atlas e mistura fg/bg.
 
 cbuffer GridCB : register(b0)
 {
-    int2   gridSize;   // colunas, linhas
-    int2   cellSize;   // px físicos
-    int2   origin;     // margem (grelha centrada)
-    int    atlasCols;  // glifos por linha no atlas
+    int2   gridSize;        // colunas, linhas deste monitor
+    int2   cellSize;        // px físicos (do atlas deste monitor)
+    int2   origin;          // margem (grelha centrada)
+    int    atlasCols;       // glifos por linha no atlas
     uint   flags;
-    float4 background; // cor da margem e das células com bg.a = 0
+    float2 monitorToCanvas; // origem do monitor - origem do canvas, em px
+    float2 canvasCell;      // tamanho de uma célula do canvas, em px
+    int2   canvasSize;      // colunas, linhas do canvas
+    int2   _pad;
+    float4 background;      // cor da margem e das células com bg.a = 0
 };
 
 StructuredBuffer<uint3> cells : register(t0); // x = glifo (16 bits) | flags, y = fg RGBA8, z = bg RGBA8
@@ -37,7 +42,15 @@ float4 PSMain(float4 pos : SV_Position) : SV_Target
 
     int2 c = p / cellSize;
     int2 local = p - c * cellSize;
-    uint3 cell = cells[c.y * gridSize.x + c.x];
+
+    // Centro desta célula em px do canvas -> célula do canvas. Com o mesmo DPI é 1:1;
+    // com DPIs diferentes, um monitor com células maiores salta células do canvas,
+    // mantendo a mesma escala física entre ecrãs.
+    float2 center = monitorToCanvas + float2(origin) + (float2(c) + 0.5) * float2(cellSize);
+    int2 g = int2(floor(center / canvasCell));
+    if (any(g < 0) || any(g >= canvasSize))
+        return float4(background.rgb, 1);
+    uint3 cell = cells[g.y * canvasSize.x + g.x];
 
     uint glyph = cell.x & 0xFFFF;
     int2 a = int2(glyph % atlasCols, glyph / atlasCols) * cellSize + local;

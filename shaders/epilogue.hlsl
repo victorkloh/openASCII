@@ -12,12 +12,26 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= grid.x || id.y >= grid.y)
         return;
+    uint index = id.y * grid.x + id.x;
 
+    // Células fora de todos os monitores (no modo estendido, os "buracos" do ecrã virtual)
+    // ficam vazias e com estado 0: para uma simulação, funcionam como uma parede.
+    if (!visible(int2(id.xy)))
+    {
+        _cells[index] = uint3(0, 0, 0);
+        _stateNext[index] = float4(0, 0, 0, 0);
+        return;
+    }
+
+    worldSize = float2(grid) * worldPerCell;
     mouse.pos = _mousePos;
     mouse.vel = _mouseVel;
+    mouse.world = _mousePos * worldPerCell;
+    mouse.velWorld = _mouseVel * worldPerCell;
     mouse.buttons = _buttons;
     mouse.inside = _inside != 0;
     mouse.clickPos = _clickPos;
+    mouse.clickWorld = _clickPos * worldPerCell;
     mouse.clickTime = _clickTime;
     mouse.clickButton = _clickButton;
     mouse.scroll = _scroll;
@@ -26,12 +40,13 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     i.id = id.xy;
     i.pos = float2(id.xy) + 0.5;
     i.uv = i.pos / float2(grid);
+    i.world = i.pos * worldPerCell;
 
     CellOut o = cell(i);
 
     uint n = max(charsetSize, 1u);
-    uint glyph = o.glyph > 0 ? min((uint)(o.glyph - 1), n - 1) : min((uint)(saturate(o.value) * n), n - 1);
-    uint index = id.y * grid.x + id.x;
-    _cells[index] = uint3(glyph, _packColor(o.fg), _packColor(o.bg));
+    uint maxSlot = n + glyphCount - 1u;
+    uint g = o.glyph > 0 ? min((uint)(o.glyph - 1), maxSlot) : min((uint)(saturate(o.value) * n), n - 1);
+    _cells[index] = uint3(g, _packColor(o.fg), _packColor(o.bg));
     _stateNext[index] = o.state;
 }

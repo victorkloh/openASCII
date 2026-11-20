@@ -113,6 +113,8 @@ void rasterizeGlyph(IDWriteFactory2* dwrite, IDWriteFontFace* face, UINT16 glyph
 std::wstring AtlasDesc::key() const {
     std::wstring k = std::format(L"{}|{}|{}|", font, weight, cellHeightPx);
     for (char32_t c : charset) k += std::format(L"{:x},", static_cast<unsigned>(c));
+    k += L'|';
+    for (char32_t c : glyphs) k += std::format(L"{:x},", static_cast<unsigned>(c));
     return k;
 }
 
@@ -167,6 +169,8 @@ HRESULT GlyphAtlas::build(ID3D11Device* device, IDWriteFactory2* dwrite, const A
     //    (para mensagens de erro no ecrã) e por fim '?' como substituto.
     std::u32string chars = desc.charset.empty() ? std::u32string(U" ") : desc.charset;
     charsetSize_ = static_cast<int>(chars.size());
+    chars += desc.glyphs; // sprites logo a seguir (posições fixas, mesmo que repitam caracteres)
+    glyphCount_ = static_cast<int>(desc.glyphs.size());
     for (char32_t c = 0x20; c < 0x7F; ++c) {
         if (chars.find(c) == std::u32string::npos) chars += c;
     }

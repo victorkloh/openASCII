@@ -9,20 +9,24 @@
 // ---------------------------------------------------------------------------
 // Disponível:
 //   time, dt            segundos desde o arranque / desde o último frame
-//   grid                uint2: colunas, linhas
-//   cellPx, resolution  tamanho de uma célula e do ecrã em píxeis
+//   grid                uint2: colunas, linhas do canvas (no modo estendido cobre TODOS os monitores)
+//   cellPx, resolution  tamanho de uma célula e do canvas em píxeis
 //   cellAspect          largura/altura da célula (~0.5): multiplica dx por isto para distâncias redondas
-//   mouse.pos           posição do rato em células (float2, pode estar fora da grelha)
-//   mouse.vel           velocidade suavizada em células/segundo
+//   worldPerCell        float2: unidades de mundo por célula. O "mundo" não depende do tamanho
+//                       da célula (só de `scale`): mudar a resolução da grelha não muda o efeito
+//   worldSize           tamanho do canvas em unidades de mundo
+//   visible(c)          a célula c está dentro de algum monitor? (as outras não aparecem)
+//   mouse.pos/.world    posição do rato em células / em unidades de mundo
+//   mouse.vel/.velWorld velocidade suavizada (células/s, mundo/s)
 //   mouse.buttons       bits MOUSE_LEFT | MOUSE_RIGHT | MOUSE_MIDDLE (só quando o clique começou no desktop)
-//   mouse.inside        o rato está sobre o ambiente de trabalho deste monitor
-//   mouse.clickPos      onde foi o último clique (células); mouse.clickTime = quando (em `time`)
-//   mouse.clickButton   botão do último clique; justClicked() = o clique foi neste frame
+//   mouse.inside        o rato está sobre o ambiente de trabalho
+//   mouse.clickPos/.clickWorld, mouse.clickTime, mouse.clickButton; justClicked() = clique neste frame
 //   mouse.scroll        rodas do scroll neste frame (+ para cima)
 //   param("nome")       valor de um parâmetro declarado em [params] do wallpaper.toml
 //   palette(t)          cor da paleta em t ∈ [0,1] (interpola entre as cores)
 //   bgColor             cor de fundo do wallpaper.toml
-//   charsetSize         número de caracteres do charset
+//   charsetSize         número de caracteres do charset (a rampa de `value`)
+//   glyph(k)            para o.glyph: o k-ésimo caractere de `glyphs` no wallpaper.toml (sprites)
 //   noise(p), fbm(p)    ruído suave em [0,1] (2D e 3D) e soma de oitavas
 //   hash11/21/22/33     números pseudo-aleatórios em [0,1)
 //   prev(c)             o `state` que esta célula (ou a vizinha c) escreveu no frame anterior
@@ -52,12 +56,18 @@ cbuffer Frame : register(b0)
     uint   paletteCount;
     uint   frameIndex;
     float  cellAspect;
-    float  _pad0;
+    uint   glyphCount;
 
     float4 _params[4];
 
     float2 cellPx;
     float2 resolution;
+
+    float2 worldPerCell;
+    uint   _monitorCount;
+    float  _pad1;
+
+    int4   _monitors[8]; // zonas visíveis do canvas (células): x0, y0, x1, y1
 };
 
 StructuredBuffer<float4>   _statePrev : register(t0);
@@ -72,21 +82,38 @@ struct MouseState
 {
     float2 pos;
     float2 vel;
+    float2 world;
+    float2 velWorld;
     uint   buttons;
     bool   inside;
     float2 clickPos;
+    float2 clickWorld;
     float  clickTime;
     uint   clickButton;
     float  scroll;
 };
 static MouseState mouse;
+static float2 worldSize;
 
 struct CellIn
 {
-    uint2  id;   // coluna, linha (inteiros)
-    float2 pos;  // centro da célula em células (id + 0.5): compara diretamente com mouse.pos
-    float2 uv;   // pos / grid, em [0,1]
+    uint2  id;    // coluna, linha (inteiros)
+    float2 pos;   // centro da célula em células (id + 0.5): compara diretamente com mouse.pos
+    float2 uv;    // pos / grid, em [0,1]
+    float2 world; // centro da célula em unidades de mundo (não depende da resolução da grelha)
 };
+
+bool visible(int2 c)
+{
+    [loop] for (uint k = 0; k < _monitorCount; k++)
+    {
+        int4 r = _monitors[k];
+        if (c.x >= r.x && c.y >= r.y && c.x < r.z && c.y < r.w) return true;
+    }
+    return false;
+}
+
+int glyph(uint k) { return int(charsetSize + min(k, max(glyphCount, 1u) - 1u)) + 1; }
 
 struct CellOut
 {

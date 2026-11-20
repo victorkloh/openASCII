@@ -29,11 +29,16 @@ struct alignas(16) FrameConstants {
     float background[4];
     float palette[8][4];
     uint32_t paletteCount, frameIndex;
-    float cellAspect, pad0;
+    float cellAspect;
+    uint32_t glyphCount;
     float params[16];
     float cellPxW, cellPxH, resolutionW, resolutionH;
+    float worldPerCellX, worldPerCellY;
+    uint32_t monitorCount;
+    float pad1;
+    int32_t monitors[8][4]; // zonas visíveis do canvas, em células
 };
-static_assert(sizeof(FrameConstants) == 304, "tem de bater com o cbuffer Frame do prelude.hlsl");
+static_assert(sizeof(FrameConstants) == 448, "tem de bater com o cbuffer Frame do prelude.hlsl");
 
 // Thread-safe: não toca no dispositivo. Pode correr num thread de trabalho.
 render::CompiledShader compileWallpaperShader(const Manifest& manifest, const std::string& userSource,
@@ -49,7 +54,7 @@ public:
     void releaseDeviceObjects(); // mantém o blob, para recriar depois de um device lost
     bool valid() const { return cs_ != nullptr; }
 
-    void dispatch(ID3D11DeviceContext* ctx, render::GridRenderer& grid, const FrameConstants& frame);
+    void dispatch(ID3D11DeviceContext* ctx, render::CellCanvas& canvas, const FrameConstants& frame);
 
 private:
     ComPtr<ID3DBlob> blob_;

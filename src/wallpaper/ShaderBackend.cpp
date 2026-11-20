@@ -57,7 +57,7 @@ void ShaderProgram::releaseDeviceObjects() {
     constants_.Reset();
 }
 
-void ShaderProgram::dispatch(ID3D11DeviceContext* ctx, render::GridRenderer& grid, const FrameConstants& frame) {
+void ShaderProgram::dispatch(ID3D11DeviceContext* ctx, render::CellCanvas& grid, const FrameConstants& frame) {
     if (!cs_ || !grid.valid() || grid.layout().cellCount() == 0) return;
     ctx->UpdateSubresource(constants_.Get(), 0, nullptr, &frame, 0, 0);
 

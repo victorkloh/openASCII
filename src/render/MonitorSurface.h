@@ -54,8 +54,9 @@ public:
     unsigned index = 0;
     PauseReason pause = PauseReason::None;
 
-    GlyphAtlas atlas;   // por monitor: depende do DPI
-    GridRenderer grid;  // cell buffer + estado prev()
+    GlyphAtlas atlas;            // por monitor: depende do DPI
+    GridRenderer grid;           // a grelha que este monitor desenha
+    CellCanvas* canvas = nullptr; // de onde lê as células (partilhado no modo estendido)
 
 private:
     static LRESULT CALLBACK wndProc(HWND, UINT, WPARAM, LPARAM);

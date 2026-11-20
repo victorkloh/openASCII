@@ -20,6 +20,7 @@ struct AtlasDesc {
     int weight = 400;
     int cellHeightPx = 20;          // já multiplicado pela escala do DPI
     std::u32string charset;         // ocupa os slots 0..N-1, pela mesma ordem
+    std::u32string glyphs;          // sprites: slots N..N+M-1 (glyph(k) no shader)
 
     std::wstring key() const;       // identifica o atlas (para saber quando reconstruir)
 };
@@ -35,6 +36,7 @@ public:
     int cellH() const { return cellH_; }
     int columns() const { return columns_; }
     int charsetSize() const { return charsetSize_; }
+    int glyphCount() const { return glyphCount_; }
     const std::wstring& key() const { return key_; }
 
     // Slot do atlas para um caractere (ASCII imprimível está sempre presente; o resto cai em '?').
@@ -43,7 +45,7 @@ public:
 private:
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv_;
     std::unordered_map<char32_t, uint16_t> slots_;
-    int cellW_ = 1, cellH_ = 1, columns_ = 1, charsetSize_ = 1;
+    int cellW_ = 1, cellH_ = 1, columns_ = 1, charsetSize_ = 1, glyphCount_ = 0;
     uint16_t fallback_ = 0;
     std::wstring key_;
 };

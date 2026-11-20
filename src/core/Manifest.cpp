@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <format>
+#include <sstream>
 
 #include <toml++/toml.hpp>
 
@@ -80,6 +81,12 @@ std::optional<std::u32string> getCharset(const toml::table& t, std::string_view 
     if (cs.empty()) throw Invalid{std::format("'{}' não pode estar vazio", key)};
     if (cs.size() > 4096) throw Invalid{std::format("'{}' tem demasiados caracteres (máx. 4096)", key)};
     return cs;
+}
+
+std::optional<float> getScale(const toml::table& t) {
+    auto s = getNumber(t, "scale");
+    if (s && (*s < 1.0f || *s > 400.0f)) throw Invalid{"'scale' tem de estar entre 1 e 400"};
+    return s;
 }
 
 void parseParams(const toml::table& params, Manifest& m) {
@@ -174,9 +181,14 @@ ManifestResult parseManifest(std::string_view text) {
         }
         m.fps = getInt(*render, "fps", 1, 240).value_or(m.fps);
         m.cell = getInt(*render, "cell", 4, 128).value_or(m.cell);
+        m.scale = getScale(*render).value_or(m.scale);
         m.font = getString(*render, "font").value_or(m.font);
         m.fontWeight = getInt(*render, "font_weight", 100, 950).value_or(m.fontWeight);
         m.charset = getCharset(*render, "charset").value_or(m.charset);
+        if (render->contains("glyphs")) {
+            m.glyphs = getCharset(*render, "glyphs").value_or(U"");
+            if (m.glyphs.size() > 256) throw Invalid{"render.glyphs tem no máximo 256 caracteres"};
+        }
 
         if (const toml::table* colors = root["colors"].as_table()) {
             m.background = getColor(*colors, "background").value_or(m.background);
@@ -193,16 +205,17 @@ ManifestResult parseManifest(std::string_view text) {
     return result;
 }
 
-ThemeResult parseTheme(std::string_view text) {
+ThemeResult parseTheme(std::string_view text, bool requireBase) {
     ThemeResult result;
     Theme& t = result.theme;
     result.error = catchErrors([&] {
         const toml::table root = toml::parse(text);
         t.base = getString(root, "base").value_or("");
-        if (t.base.empty()) throw Invalid{"um tema precisa de 'base = \"<wallpaper>\"'"};
+        if (requireBase && t.base.empty()) throw Invalid{"um tema precisa de 'base = \"<wallpaper>\"'"};
         t.font = getString(root, "font");
         t.fontWeight = getInt(root, "font_weight", 100, 950);
         t.cell = getInt(root, "cell", 4, 128);
+        t.scale = getScale(root);
         t.fps = getInt(root, "fps", 1, 240);
         t.charset = getCharset(root, "charset");
         t.background = getColor(root, "background");
@@ -224,6 +237,7 @@ std::vector<std::string> applyTheme(Manifest& m, const Theme& t) {
     if (t.font) m.font = *t.font;
     if (t.fontWeight) m.fontWeight = *t.fontWeight;
     if (t.cell) m.cell = *t.cell;
+    if (t.scale) m.scale = *t.scale;
     if (t.fps) m.fps = *t.fps;
     if (t.charset) m.charset = *t.charset;
     if (t.background) m.background = *t.background;
@@ -240,6 +254,44 @@ std::vector<std::string> applyTheme(Manifest& m, const Theme& t) {
         }
     }
     return warnings;
+}
+
+namespace {
+std::string colorHex(Rgba8 c) {
+    return c.a == 255 ? std::format("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+                      : std::format("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a);
+}
+} // namespace
+
+std::string themeToToml(const Theme& t, std::string_view headerComment) {
+    toml::table root;
+    if (!t.base.empty()) root.insert("base", t.base);
+    if (t.font) root.insert("font", *t.font);
+    if (t.fontWeight) root.insert("font_weight", *t.fontWeight);
+    if (t.cell) root.insert("cell", *t.cell);
+    if (t.scale) root.insert("scale", static_cast<double>(*t.scale));
+    if (t.fps) root.insert("fps", *t.fps);
+    if (t.charset) root.insert("charset", encodeUtf8(*t.charset));
+    if (t.background) root.insert("background", colorHex(*t.background));
+    if (t.palette) {
+        toml::array arr;
+        for (const Rgba8& c : *t.palette) arr.push_back(colorHex(c));
+        root.insert("palette", std::move(arr));
+    }
+    if (!t.params.empty()) {
+        toml::table params;
+        for (const auto& [name, value] : t.params) params.insert(name, static_cast<double>(value));
+        root.insert("params", std::move(params));
+    }
+    std::ostringstream out;
+    if (!headerComment.empty()) out << "# " << headerComment << "\n";
+    out << root << "\n";
+    return out.str();
+}
+
+bool themeIsEmpty(const Theme& t) {
+    return !t.font && !t.fontWeight && !t.cell && !t.scale && !t.fps && !t.charset && !t.background &&
+           !t.palette && t.params.empty();
 }
 
 bool looksLikeTheme(std::string_view text) {

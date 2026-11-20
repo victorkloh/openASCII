@@ -36,10 +36,12 @@ struct Manifest {
     WallpaperMode mode = WallpaperMode::Shader;
     std::string entry = "main.hlsl";
     int fps = 30;
-    int cell = 10; // altura da célula em px lógicos
+    int cell = 10;      // altura da célula em px lógicos = RESOLUÇÃO da grelha
+    float scale = 10.0f; // px lógicos por unidade de mundo = ESCALA do efeito (independente de `cell`)
     std::string font = "Cascadia Mono";
     int fontWeight = 400;
-    std::u32string charset = U" .:-=+*#%@";
+    std::u32string charset = U" .:-=+*#%@"; // rampa: value 0..1 escolhe daqui
+    std::u32string glyphs;                  // caracteres extra (sprites), via glyph(k) no shader
     // [colors]
     Rgba8 background{5, 7, 13, 255};
     std::vector<Rgba8> palette;
@@ -64,6 +66,7 @@ struct Theme {
     std::optional<std::string> font;
     std::optional<int> fontWeight;
     std::optional<int> cell;
+    std::optional<float> scale;
     std::optional<int> fps;
     std::optional<std::u32string> charset;
     std::optional<Rgba8> background;
@@ -76,10 +79,17 @@ struct ThemeResult {
     std::string error;
 };
 
-ThemeResult parseTheme(std::string_view tomlText);
+// `requireBase = false` para os ajustes do utilizador (que não precisam de `base`).
+ThemeResult parseTheme(std::string_view tomlText, bool requireBase = true);
 
 // Aplica o tema ao manifest. Devolve avisos (ex.: parâmetro que o wallpaper não tem).
 std::vector<std::string> applyTheme(Manifest& manifest, const Theme& theme);
+
+// O inverso de parseTheme: gera o .toml de um tema (para "Guardar como tema" e para os
+// ajustes do utilizador). parseTheme(themeToToml(t)) devolve t.
+std::string themeToToml(const Theme& theme, std::string_view headerComment = {});
+
+bool themeIsEmpty(const Theme& theme);
 
 // Um ficheiro .toml é um tema se tiver a chave `base` no topo.
 bool looksLikeTheme(std::string_view tomlText);

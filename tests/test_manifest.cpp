@@ -113,6 +113,46 @@ viscosity = 5.0
     CHECK(warnings.size() == 2); // parâmetro inexistente + valor fora dos limites
 }
 
+TEST_CASE("scale e glyphs") {
+    const auto r = parseManifest("[render]\ncell = 8\nscale = 14.5\nglyphs = \"v^ñ\"\n");
+    REQUIRE(r.error.empty());
+    CHECK(r.manifest.cell == 8);
+    CHECK(r.manifest.scale == doctest::Approx(14.5));
+    CHECK(r.manifest.glyphs == U"v^ñ");
+    CHECK_FALSE(parseManifest("[render]\nscale = 0\n").error.empty());
+}
+
+TEST_CASE("themeToToml faz o caminho inverso de parseTheme") {
+    Theme t;
+    t.base = "ripple";
+    t.cell = 7;
+    t.scale = 12.0f;
+    t.font = "Consolas";
+    t.charset = U" ░▒▓█";
+    t.background = Rgba8{1, 2, 3, 255};
+    t.palette = std::vector<Rgba8>{{255, 0, 0, 255}, {0, 255, 0, 128}};
+    t.params = {{"speed", 2.5f}, {"rain", 0.0f}};
+    const std::string text = themeToToml(t, "gerado pelo teste");
+    CHECK(text.rfind("# gerado pelo teste", 0) == 0);
+    const auto back = parseTheme(text);
+    REQUIRE(back.error.empty());
+    CHECK(back.theme.base == "ripple");
+    CHECK(*back.theme.cell == 7);
+    CHECK(*back.theme.scale == doctest::Approx(12.0));
+    CHECK(*back.theme.font == "Consolas");
+    CHECK(*back.theme.charset == U" ░▒▓█");
+    CHECK(*back.theme.background == Rgba8{1, 2, 3, 255});
+    REQUIRE(back.theme.palette->size() == 2);
+    CHECK((*back.theme.palette)[1] == Rgba8{0, 255, 0, 128});
+    CHECK(back.theme.params.size() == 2);
+    // Ajustes do utilizador não precisam de base.
+    Theme overrides;
+    overrides.cell = 20;
+    CHECK(parseTheme(themeToToml(overrides), false).error.empty());
+    CHECK_FALSE(themeIsEmpty(overrides));
+    CHECK(themeIsEmpty(Theme{}));
+}
+
 TEST_CASE("erros dos temas") {
     CHECK_FALSE(parseTheme("cell = 7\n").error.empty());
     CHECK_FALSE(parseTheme("base = \"x\"\ncell = 1\n").error.empty());

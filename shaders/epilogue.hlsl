@@ -30,6 +30,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     mouse.velWorld = _mouseVel * worldPerCell;
     mouse.buttons = _buttons;
     mouse.inside = _inside != 0;
+    mouse.presence = _presence;
     mouse.clickPos = _clickPos;
     mouse.clickWorld = _clickPos * worldPerCell;
     mouse.clickTime = _clickTime;

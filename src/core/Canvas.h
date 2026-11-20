@@ -23,6 +23,7 @@ struct CanvasLayout {
     int cellW = 1;    // tamanho de referência de uma célula do canvas (px físicos)
     int cellH = 1;
     std::vector<Rect> monitorCells; // por monitor: a zona do canvas que ele mostra (em células)
+    int reference = 0;              // índice (em monitorCells) do monitor principal
 
     int cellCount() const { return cols * rows; }
 };

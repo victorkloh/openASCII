@@ -26,6 +26,8 @@ TEST_CASE("canvas estendido: monitor vertical à esquerda, em coordenadas negati
     // O caso real desta máquina: principal 1920x1080 em (0,0), vertical 1080x1920 em (-1080,-615).
     const CanvasMonitor ms[] = {monitor({0, 0, 1920, 1080}, 6, 12), monitor({-1080, -615, 0, 1305}, 6, 12)};
     const auto c = computeSpanCanvas(ms, 0);
+    CHECK(c.reference == 0);
+    CHECK(computeSpanCanvas(ms, 1).reference == 1);
     CHECK(c.originPx.x <= -1080);
     CHECK(c.originPx.y <= -615);
     CHECK(c.originPx.x + c.cols * c.cellW >= 1920);

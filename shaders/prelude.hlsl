@@ -19,7 +19,9 @@
 //   mouse.pos/.world    posição do rato em células / em unidades de mundo
 //   mouse.vel/.velWorld velocidade suavizada (células/s, mundo/s)
 //   mouse.buttons       bits MOUSE_LEFT | MOUSE_RIGHT | MOUSE_MIDDLE (só quando o clique começou no desktop)
-//   mouse.inside        o rato está sobre o ambiente de trabalho
+//   mouse.inside        o rato está sobre o ambiente de trabalho (agora)
+//   mouse.presence      0..1 suave: multiplica os efeitos do rato por isto para entrarem e
+//                       saírem com uma transição (quando sai, mouse.pos fica na última posição)
 //   mouse.clickPos/.clickWorld, mouse.clickTime, mouse.clickButton; justClicked() = clique neste frame
 //   mouse.scroll        rodas do scroll neste frame (+ para cima)
 //   param("nome")       valor de um parâmetro declarado em [params] do wallpaper.toml
@@ -30,6 +32,9 @@
 //   noise(p), fbm(p)    ruído suave em [0,1] (2D e 3D) e soma de oitavas
 //   hash11/21/22/33     números pseudo-aleatórios em [0,1)
 //   prev(c)             o `state` que esta célula (ou a vizinha c) escreveu no frame anterior
+//   localTime, localDate hora e data locais (para relógios)
+//   primaryCenter(), primaryCenterWorld(), primarySizeWorld(), primaryRect(), monitorRectAt(c)
+//                       para centrar coisas no monitor principal ou achar o chão de cada ecrã
 // ---------------------------------------------------------------------------
 
 cbuffer Frame : register(b0)
@@ -65,9 +70,13 @@ cbuffer Frame : register(b0)
 
     float2 worldPerCell;
     uint   _monitorCount;
-    float  _pad1;
+    uint   _primary;
 
     int4   _monitors[8]; // zonas visíveis do canvas (células): x0, y0, x1, y1
+
+    float3 localTime;    // hora local: horas, minutos, segundos (com fração)
+    float  _presence;
+    uint4  localDate;    // ano, mês (1-12), dia, dia da semana (0 = domingo)
 };
 
 StructuredBuffer<float4>   _statePrev : register(t0);
@@ -86,6 +95,7 @@ struct MouseState
     float2 velWorld;
     uint   buttons;
     bool   inside;
+    float  presence; // 0..1 suave: sobe quando o rato entra no fundo, desce devagar quando sai
     float2 clickPos;
     float2 clickWorld;
     float  clickTime;
@@ -114,6 +124,25 @@ bool visible(int2 c)
 }
 
 int glyph(uint k) { return int(charsetSize + min(k, max(glyphCount, 1u) - 1u)) + 1; }
+
+// ---------------------------------------------------------------------------
+// Monitores (no modo estendido o canvas cobre vários). Retângulos em células: x0, y0, x1, y1.
+// ---------------------------------------------------------------------------
+int4 primaryRect() { return _monitors[min(_primary, max(_monitorCount, 1u) - 1u)]; }
+float2 primaryCenter() { int4 r = primaryRect(); return (float2(r.xy) + float2(r.zw)) * 0.5; }
+float2 primaryCenterWorld() { return primaryCenter() * worldPerCell; }
+float2 primarySizeWorld() { int4 r = primaryRect(); return float2(r.zw - r.xy) * worldPerCell; }
+
+// O retângulo do monitor que contém a célula c (para "o chão" ou "o topo" de cada ecrã).
+int4 monitorRectAt(int2 c)
+{
+    [loop] for (uint k = 0; k < _monitorCount; k++)
+    {
+        int4 r = _monitors[k];
+        if (c.x >= r.x && c.y >= r.y && c.x < r.z && c.y < r.w) return r;
+    }
+    return int4(0, 0, int(grid.x), int(grid.y));
+}
 
 struct CellOut
 {

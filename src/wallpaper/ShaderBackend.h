@@ -35,10 +35,13 @@ struct alignas(16) FrameConstants {
     float cellPxW, cellPxH, resolutionW, resolutionH;
     float worldPerCellX, worldPerCellY;
     uint32_t monitorCount;
-    float pad1;
+    uint32_t primaryIndex;  // qual das zonas é o monitor principal
     int32_t monitors[8][4]; // zonas visíveis do canvas, em células
+    float localHour, localMinute, localSecond;      // hora local (segundos com fração)
+    float mousePresence;                            // 0..1: o rato está (ou esteve há pouco) no fundo
+    uint32_t year, month, day, weekday;              // data local (weekday 0 = domingo)
 };
-static_assert(sizeof(FrameConstants) == 448, "tem de bater com o cbuffer Frame do prelude.hlsl");
+static_assert(sizeof(FrameConstants) == 480, "tem de bater com o cbuffer Frame do prelude.hlsl");
 
 // Thread-safe: não toca no dispositivo. Pode correr num thread de trabalho.
 render::CompiledShader compileWallpaperShader(const Manifest& manifest, const std::string& userSource,

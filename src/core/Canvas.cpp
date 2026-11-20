@@ -23,6 +23,7 @@ CanvasLayout computeSpanCanvas(std::span<const CanvasMonitor> monitors, size_t r
     CanvasLayout c;
     if (monitors.empty()) return c;
     reference = std::min(reference, monitors.size() - 1);
+    c.reference = static_cast<int>(reference);
     const CanvasMonitor& ref = monitors[reference];
     c.cellW = std::max(1, ref.grid.cellW);
     c.cellH = std::max(1, ref.grid.cellH);

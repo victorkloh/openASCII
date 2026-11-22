@@ -3,6 +3,7 @@ name = "Terrain"
 author = "AsciiPaper"
 version = "1.0.0"
 description = "Paisagem de ruído a deslizar devagar; o rato faz parallax"
+category = "Paisagens"
 
 [render]
 mode = "shader"

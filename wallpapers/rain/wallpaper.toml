@@ -3,6 +3,7 @@ name = "Rain"
 author = "AsciiPaper"
 version = "1.0.0"
 description = "Noite de chuva vista de uma janela embaciada, com a cidade desfocada lá fora. Arrasta o rato para desenhar no vidro."
+category = "Ambiente"
 
 [render]
 mode = "shader"

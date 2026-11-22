@@ -1,0 +1,32 @@
+[meta]
+name = "Snow"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Neve que assenta em cima das janelas, dos ícones e da barra de tarefas, e cai quando as mexes. Tech demo de [inputs] windows e icons."
+category = "Ambiente"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 10
+scale = 10
+font = "Cascadia Mono"
+charset = " "   # desenha só com os seus próprios caracteres (glyphs)
+glyphs = ".·*+o▄█"   # flocos (longe -> perto), meia célula (topo da neve), neve
+
+[inputs]
+windows = true   # as janelas abertas são chão para a neve
+icons = true     # os ícones do ambiente de trabalho também
+
+[colors]
+background = "#03060d"
+palette = ["#03060d", "#0a1730", "#29456e", "#6f93bf", "#b9d3ee", "#eef6ff"]
+
+[params]
+rate    = { default = 1.0, min = 0.0, max = 10.0 } # intensidade do nevão (no ar e a acumular)
+depth   = { default = 5.0, min = 1.0, max = 30.0 } # altura máxima das pilhas (células)
+melt    = { default = 1.0, min = 0.0, max = 10.0 } # quão depressa o topo derrete
+density = { default = 1.0, min = 0.3, max = 3.0 }  # flocos no ar
+speed   = { default = 1.0, min = 0.2, max = 3.0 }  # velocidade a cair
+wind    = { default = 1.0, min = 0.0, max = 4.0 }

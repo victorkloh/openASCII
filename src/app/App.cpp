@@ -38,6 +38,7 @@ constexpr wchar_t kControllerClass[] = L"AsciiPaperController";
 constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 constexpr UINT WM_APP_TRAY = WM_APP + 10;
 constexpr UINT WM_APP_LOAD_DONE = WM_APP + 11; // terminou a compilação em segundo plano
+constexpr UINT WM_APP_MODAL_FRAME = WM_APP + 12; // é hora de um frame durante um loop modal
 
 enum TimerId : UINT_PTR {
     TIMER_LAYOUT = 1,      // mudança de monitores/DPI (com debounce)
@@ -49,6 +50,8 @@ enum TimerId : UINT_PTR {
     TIMER_HOT_RELOAD,      // debounce: os editores gravam em vários passos
     TIMER_BENCH,           // fim do --bench
     TIMER_SCREENSHOT,      // --screenshot: gravar o próximo frame
+    TIMER_MODAL_FRAME,     // desenhar durante loops modais (arrastar o launcher)
+    TIMER_PLAYLIST,        // trocar para o próximo wallpaper da playlist
 };
 
 App* g_app = nullptr;
@@ -183,6 +186,7 @@ bool App::init() {
               options_.windowed ? L"janela" : L"wallpaper", static_cast<int>(awareness));
 
     config_ = Config::load();
+    autostartCached_ = autostartEnabled(); // a interface pede settings() em cada pintura
     settings_.maxFps = config_.maxFps;
     settings_.pause.pauseOnMaximized = config_.pauseOnMaximized;
     settings_.pause.pauseOnBatterySaver = config_.pauseOnBatterySaver;
@@ -246,7 +250,7 @@ bool App::init() {
             ShowWindow(dialog_->hwnd(), SW_HIDE);
             hr = dialog_->renderToPng(options_.uiScreenshot);
         } else if (gfx_ && !options_.uiScreenshot.empty()) {
-            hr = launcher_->renderToPng(options_.uiScreenshot, options_.uiPage);
+            hr = launcher_->renderToPng(options_.uiScreenshot, options_.uiPage, options_.uiHeight);
         }
         if (gfx_ && !options_.flyoutScreenshot.empty()) hr = flyout_->renderToPng(options_.flyoutScreenshot);
         log::info(L"Screenshot da interface: {}", SUCCEEDED(hr) ? L"ok" : win::hrToString(hr));
@@ -305,6 +309,7 @@ bool App::init() {
         scheduleReattach(1000);
     }
     checkOtherApps();
+    schedulePlaylist();
     if (options_.openLauncher) openLauncher();
     return true;
 }
@@ -316,6 +321,7 @@ void App::shutdown() {
     exiting_ = true;
     stopFrameTimer();
     watcher_.stop();
+    inputs_.stop();
     if (pendingLoad_.valid()) pendingLoad_.wait();
     dialog_.reset();
     launcher_.reset();
@@ -430,8 +436,58 @@ int App::run() {
                 log::warn(L"Mensagem lenta: 0x{:04X} (wParam {}) para {} demorou {:.1f} ms", msg.message,
                           static_cast<unsigned long long>(msg.wParam), win::className(msg.hwnd), ms);
             }
+            // Uma rajada de mensagens (ex.: a interface a repintar) não pode atrasar o fundo:
+            // se já é hora do próximo frame, desenhá-lo antes de continuar.
+            renderIfDue();
         }
     }
+}
+
+void App::renderIfDue() {
+    if (frameTimerArmed_ && WaitForSingleObject(frameTimer_.get(), 0) == WAIT_OBJECT_0) {
+        frameTimerArmed_ = false;
+        renderFrame();
+        if (anyActive()) armFrameTimer(false);
+    }
+}
+
+void App::setModalLoop(bool active) {
+    const int before = modalLoops_;
+    modalLoops_ = std::max(0, modalLoops_ + (active ? 1 : -1));
+    // Durante um loop modal (arrastar o launcher, menus) o Windows despacha as mensagens por
+    // nós, mas o nosso MsgWait não corre e o timer de frames fica sem ninguém que o atenda.
+    // Um WM_TIMER não chega: anda aos saltos de ~16 ms (medido: intervalos de 48 ms a 30 fps).
+    // Por isso um thread do threadpool espera pelo próprio timer de alta resolução e publica
+    // uma mensagem à hora certa; o loop modal despacha-a logo. O WM_TIMER fica de reserva.
+    if (before == 0 && modalLoops_ > 0) {
+        modalWait_ = CreateThreadpoolWait(
+            [](PTP_CALLBACK_INSTANCE, void* ctx, PTP_WAIT, TP_WAIT_RESULT) {
+                PostMessageW(static_cast<App*>(ctx)->controller_, WM_APP_MODAL_FRAME, 0, 0);
+            },
+            this, nullptr);
+        if (modalWait_ && frameTimerArmed_) SetThreadpoolWait(modalWait_, frameTimer_.get(), nullptr);
+        SetTimer(controller_, TIMER_MODAL_FRAME, 50, nullptr);
+    } else if (before > 0 && modalLoops_ == 0) {
+        KillTimer(controller_, TIMER_MODAL_FRAME);
+        if (modalWait_) {
+            SetThreadpoolWait(modalWait_, nullptr, nullptr);
+            // FALSE: se a espera já consumiu o sinal do timer, a mensagem tem de chegar a ser
+            // publicada (senão o loop principal ficaria à espera de um sinal que já passou).
+            WaitForThreadpoolWaitCallbacks(modalWait_, FALSE);
+            CloseThreadpoolWait(modalWait_);
+            modalWait_ = nullptr;
+        }
+    }
+}
+
+void App::onModalFrame() {
+    // O sinal do timer já foi consumido pela espera do threadpool: desenhar sem o testar.
+    if (frameTimerArmed_) {
+        frameTimerArmed_ = false;
+        renderFrame();
+        if (anyActive()) armFrameTimer(false);
+    }
+    if (modalWait_ && frameTimerArmed_) SetThreadpoolWait(modalWait_, frameTimer_.get(), nullptr);
 }
 
 void App::logPerfWindow() {
@@ -443,11 +499,13 @@ void App::logPerfWindow() {
     const double secs = (t - perf_.windowStart) / static_cast<double>(qpcFrequency_);
     if (secs < (benchmarking_ ? 1.0 : 5.0)) return; // no bench, de segundo a segundo
 
+    const ui::UiPaintStats uiStats = ui::takeUiPaintStats();
     log::info(L"perf: {:.1f} fps, loop acordou {:.0f}/s, mensagens {:.0f}/s, render máx {:.2f} ms, "
-               L"Present máx {:.2f} ms (médio {:.3f}), maior intervalo {:.1f} ms, engasgos {}",
+               L"Present máx {:.2f} ms (médio {:.3f}), maior intervalo {:.1f} ms, engasgos {} | "
+               L"interface: {:.0f} pinturas/s, {:.1f} ms/s, máx {:.1f} ms",
                perf_.frames / secs, perf_.wakeups / secs, perf_.messages / secs, perf_.maxRenderMs,
                perf_.maxPresentMs, perf_.frames ? perf_.sumPresentMs / perf_.frames : 0.0, perf_.maxGapMs,
-               perf_.hitches);
+               perf_.hitches, uiStats.paints / secs, uiStats.totalMs / secs, uiStats.maxMs);
     perf_ = PerfCounters{};
     perf_.windowStart = t;
 }
@@ -526,10 +584,12 @@ void App::loadWallpaperSync(const fs::path& path) {
 
 void App::loadWallpaperAsync(const fs::path& path) {
     if (pendingLoad_.valid()) {
-        // Já há uma compilação a decorrer: tentamos outra vez quando acabar.
-        SetTimer(controller_, TIMER_HOT_RELOAD, 200, nullptr);
+        // Já há uma compilação a decorrer: este pedido fica em fila (só o mais recente conta)
+        // e começa assim que a atual acabar. Antes, o pedido perdia-se e era preciso clicar 2x.
+        queuedLoad_ = path;
         return;
     }
+    loadingPath_ = path;
     // Compilar shaders pode demorar dezenas de ms. Fazemo-lo noutro thread porque o nosso
     // thread de UI está ligado ao do Explorer (janelas filhas): se bloquearmos, o desktop
     // bloqueia connosco.
@@ -542,6 +602,7 @@ void App::loadWallpaperAsync(const fs::path& path) {
 }
 
 void App::applyLoadJob(LoadJob job) {
+    const LONGLONG t0 = qpcNow();
     wallpaperPath_ = job.path; // o pedido; o hot reload vigia este, mesmo que tenha falhado
     const auto& load = job.load;
     std::string error;
@@ -581,9 +642,77 @@ void App::applyLoadJob(LoadJob job) {
                                                            : wallpaper_.watchDir;
     if (!watch.empty()) watcher_.start(watch);
 
+    if (hasWallpaper_) configureInputs();
+    const LONGLONG t1 = qpcNow();
     onManifestChanged();
-    if (flyout_) flyout_->refresh();
-    if (launcher_) launcher_->refresh();
+    const LONGLONG t2 = qpcNow();
+    if (flyout_ && flyout_->isVisible()) flyout_->refresh(); // escondido: atualiza ao abrir
+    if (launcher_ && launcher_->isVisible()) launcher_->refresh();
+    const LONGLONG t3 = qpcNow();
+    // Tudo isto corre no thread que desenha o wallpaper: o tempo total é um frame atrasado.
+    auto ms = [this](LONGLONG a, LONGLONG b) { return (b - a) * 1000.0 / static_cast<double>(qpcFrequency_); };
+    log::info(L"Troca aplicada em {:.1f} ms (shader {:.1f}, superfícies {:.1f}, interface {:.1f})", ms(t0, t3),
+              ms(t0, t1), ms(t1, t2), ms(t2, t3));
+}
+
+void App::configureInputs() {
+    inputs::InputSettings s;
+    s.weatherCity = widen(config_.weatherCity);
+    s.windowsWallpaper = g_originalWallpaper;
+    s.webcamAllowed = config_.webcamAllowed || webcamAllowedSession_;
+    inputs_.configure(wallpaper_.manifest, wallpaper_.dir, s, gfx_ ? gfx_->wic() : nullptr);
+    if (!inputs_.webcamConsentNeeded() || !dialog_ || benchmarking_ || !options_.screenshot.empty()) return;
+    // A webcam só liga com um "sim" explícito (o Windows mostra que a câmara está em uso).
+    dialog_->ask(L"Este wallpaper usa a webcam",
+                 L"Mostra-te em ASCII no fundo do ecrã, ao vivo. A imagem nunca sai do teu PC: nada é "
+                 L"gravado nem enviado.\n\nO Windows indica que a câmara está ligada enquanto este "
+                 L"wallpaper estiver ativo.",
+                 L"Ligar a webcam", L"Agora não", ui::accentFromPalette(wallpaper_.manifest.palette),
+                 [this](bool accepted, bool remember) {
+                     if (!accepted) return;
+                     webcamAllowedSession_ = true;
+                     if (remember) {
+                         config_.webcamAllowed = true;
+                         config_.save();
+                     }
+                     configureInputs();
+                 });
+}
+
+const render::GlyphAtlas* App::referenceAtlas() const {
+    for (const auto& s : surfaces_)
+        if (s->monitor.primary && s->atlas.valid()) return &s->atlas;
+    for (const auto& s : surfaces_)
+        if (s->atlas.valid()) return &s->atlas;
+    return nullptr;
+}
+
+void App::schedulePlaylist() {
+    KillTimer(controller_, TIMER_PLAYLIST);
+    if (config_.playlistMinutes > 0 && config_.playlist.size() >= 2) {
+        SetTimer(controller_, TIMER_PLAYLIST, static_cast<UINT>(config_.playlistMinutes) * 60u * 1000u, nullptr);
+    }
+}
+
+void App::advancePlaylist() {
+    const auto& list = config_.playlist;
+    if (list.size() < 2) return;
+    size_t next = 0;
+    const auto it = std::find(list.begin(), list.end(), config_.wallpaper);
+    if (config_.playlistShuffle) {
+        // Aleatório, mas nunca o mesmo duas vezes seguidas.
+        next = static_cast<size_t>(GetTickCount64() % (list.size() - 1));
+        if (it != list.end() && next >= static_cast<size_t>(it - list.begin())) ++next;
+    } else if (it != list.end()) {
+        next = (static_cast<size_t>(it - list.begin()) + 1) % list.size();
+    }
+    const fs::path p = wallpaper::resolveWallpaper(widen(list[next]));
+    if (p.empty()) {
+        log::warn(L"Playlist: \"{}\" não encontrado", widen(list[next]));
+        return;
+    }
+    log::info(L"Playlist: a passar para {}", widen(list[next]));
+    activate(p);
 }
 
 void App::onManifestChanged() {
@@ -605,7 +734,8 @@ void App::activate(const fs::path& path) {
 std::vector<ui::WallpaperInfo> App::wallpapers() {
     std::vector<ui::WallpaperInfo> out;
     for (const auto& e : wallpaper::listWallpapers()) {
-        out.push_back({widen(e.label), widen(e.base), widen(e.theme), e.path, e.preview, e.userOwned});
+        out.push_back({widen(e.label), widen(e.base), widen(e.theme), e.path, e.preview, e.userOwned, widen(e.title),
+                       widen(e.description), widen(e.category)});
     }
     return out;
 }
@@ -640,6 +770,12 @@ void App::setOverrides(const fs::path& path, const Theme& t, bool persist) {
     const Manifest& m = wallpaper_.manifest;
     const bool layoutChanged = m.cell != before.cell || m.font != before.font || m.fontWeight != before.fontWeight ||
                                m.charset != before.charset || m.fps != before.fps;
+    // Imagem/vídeo, texto ou entradas ligadas por um ajuste: reconfigurar as entradas.
+    const bool inputsChanged = m.source != before.source || m.text != before.text ||
+                               m.textInterval != before.textInterval || m.useWindows != before.useWindows ||
+                               m.useIcons != before.useIcons || m.useAudio != before.useAudio ||
+                               m.useSystem != before.useSystem || m.useWeather != before.useWeather;
+    if (inputsChanged) configureInputs();
     if (layoutChanged) {
         onManifestChanged();
     } else if (!anyActive()) {
@@ -783,7 +919,7 @@ std::vector<std::wstring> App::monospaceFonts() {
 void App::setPaused(bool p) {
     pause_.global.user = p;
     updatePause();
-    if (flyout_) flyout_->refresh();
+    if (flyout_ && flyout_->isVisible()) flyout_->refresh(); // escondido: atualiza ao abrir
 }
 
 ui::GlobalSettings App::settings() const {
@@ -794,10 +930,30 @@ ui::GlobalSettings App::settings() const {
     s.pauseOnBatterySaver = config_.pauseOnBatterySaver;
     s.maxFps = config_.maxFps;
     s.fps = config_.fps;
-    s.autostart = autostartEnabled();
+    s.autostart = autostartCached_;
     s.otherAppsOnStart = config_.otherAppsOnStart == "pause" ? 1 : config_.otherAppsOnStart == "ignore" ? 2 : 0;
     s.otherAppsOnExit = config_.otherAppsOnExit == "resume" ? 1 : config_.otherAppsOnExit == "keep" ? 2 : 0;
+    s.weatherCity = widen(config_.weatherCity);
+    s.webcamAllowed = config_.webcamAllowed;
+    s.playlistMinutes = config_.playlistMinutes;
+    s.playlistShuffle = config_.playlistShuffle;
+    s.playlistCount = static_cast<int>(config_.playlist.size());
     return s;
+}
+
+bool App::inPlaylist(const fs::path& path) const {
+    const std::string key = wallpaper::wallpaperKey(path);
+    return std::find(config_.playlist.begin(), config_.playlist.end(), key) != config_.playlist.end();
+}
+
+void App::setInPlaylist(const fs::path& path, bool included) {
+    const std::string key = wallpaper::wallpaperKey(path);
+    auto& list = config_.playlist;
+    const auto it = std::find(list.begin(), list.end(), key);
+    if (included && it == list.end()) list.push_back(key);
+    if (!included && it != list.end()) list.erase(it);
+    config_.save();
+    schedulePlaylist();
 }
 
 void App::setSettings(const ui::GlobalSettings& s) {
@@ -812,8 +968,20 @@ void App::setSettings(const ui::GlobalSettings& s) {
     static const char* onExit[] = {"ask", "resume", "keep"};
     config_.otherAppsOnStart = onStart[std::clamp(s.otherAppsOnStart, 0, 2)];
     config_.otherAppsOnExit = onExit[std::clamp(s.otherAppsOnExit, 0, 2)];
+    const std::string city = win::toUtf8(s.weatherCity);
+    const bool inputsChanged = city != config_.weatherCity || s.webcamAllowed != config_.webcamAllowed;
+    config_.weatherCity = city;
+    config_.webcamAllowed = s.webcamAllowed;
+    const bool playlistChanged = s.playlistMinutes != config_.playlistMinutes;
+    config_.playlistMinutes = std::clamp(s.playlistMinutes, 0, 24 * 60);
+    config_.playlistShuffle = s.playlistShuffle;
     config_.save();
-    if (s.autostart != autostartEnabled()) setAutostart(s.autostart);
+    if (inputsChanged && hasWallpaper_) configureInputs();
+    if (playlistChanged) schedulePlaylist();
+    if (s.autostart != autostartCached_) {
+        setAutostart(s.autostart);
+        autostartCached_ = autostartEnabled();
+    }
 
     settings_.maxFps = config_.maxFps;
     settings_.fps = effectiveFps();
@@ -846,7 +1014,7 @@ void App::suspendApps(const std::vector<desktop::OtherWallpaperApp>& apps) {
         if (desktop::suspendOtherApp(a)) suspendedApps_.push_back(a);
     }
     renderAllNow(); // um frame nosso por cima do que a outra app deixou
-    if (flyout_) flyout_->refresh();
+    if (flyout_ && flyout_->isVisible()) flyout_->refresh(); // escondido: atualiza ao abrir
 }
 
 void App::resumeSuspendedApps() {
@@ -860,6 +1028,7 @@ void App::checkOtherApps() {
     const std::wstring names = desktop::describeApps(apps);
     log::info(L"Outra app de wallpaper a correr: {} (política: {})", names, widen(config_.otherAppsOnStart));
     if (config_.otherAppsOnStart == "ignore") return;
+    if (benchmarking_) return; // o --bench não pergunta nada nem mexe noutras apps
     if (config_.otherAppsOnStart == "pause" || !dialog_) {
         if (config_.otherAppsOnStart == "pause") suspendApps(apps);
         return;
@@ -1028,6 +1197,7 @@ wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const
     }
 
     f.charsetSize = static_cast<uint32_t>(ref.atlas.charsetSize());
+    f.atlasSlots = static_cast<uint32_t>(ref.atlas.slotCount());
     f.glyphCount = static_cast<uint32_t>(ref.atlas.glyphCount());
     toFloat4(m.background, f.background);
     f.paletteCount = static_cast<uint32_t>(std::min<size_t>(m.palette.size(), 8));
@@ -1087,7 +1257,9 @@ void App::computeCanvas(render::CellCanvas& canvas, double time, double dt) {
     if (!ref || !canvas.valid()) return;
     auto* ctx = device_.context();
     if (program_.valid()) {
-        program_.dispatch(ctx, canvas, makeFrame(canvas, *ref, time, dt));
+        wallpaper::FrameConstants f = makeFrame(canvas, *ref, time, dt);
+        const wallpaper::ShaderInputs in = inputs_.bind(device_.device(), ctx, &canvas, canvas.layout(), f);
+        program_.dispatch(ctx, canvas, f, in);
     } else {
         canvas.clear(ctx);
     }
@@ -1098,7 +1270,7 @@ HRESULT App::drawSurface(render::MonitorSurface& s, bool present) {
     if (!s.hasSwapChain() || !s.canvas || !s.atlas.valid()) return S_OK;
     auto* ctx = device_.context();
     s.grid.draw(device_.device(), ctx, pipeline_, s.rtv(), s.atlas, *s.canvas, s.monitor.rect,
-                wallpaper_.manifest.background);
+                wallpaper_.manifest.background, wallpaper_.manifest.post, static_cast<float>(now()));
     if (captureRequested_) {
         // Antes do Present: com o flip model o back buffer fica indefinido depois.
         captureRequested_ = false;
@@ -1130,6 +1302,7 @@ void App::renderAllNow() {
     if (canvases_.empty()) return;
     const double dt = 1.0 / std::clamp(settings_.fps, 1, 240);
     const double t = now();
+    if (const auto* atlas = referenceAtlas()) inputs_.update(device_.device(), device_.context(), t, *atlas);
     for (auto& c : canvases_) computeCanvas(*c, t, dt);
     for (auto& s : surfaces_) {
         const HRESULT hr = drawSurface(*s);
@@ -1203,6 +1376,8 @@ void App::renderFrame() {
             }
         }
     }
+
+    if (const auto* atlas = referenceAtlas()) inputs_.update(device_.device(), device_.context(), t, *atlas);
 
     // 1) Simular cada canvas que tenha pelo menos um monitor visível (uma vez por frame,
     //    mesmo que cubra vários monitores). 2) Cada monitor ativo desenha a sua parte.
@@ -1292,7 +1467,9 @@ bool App::createWindowedSurface() {
     s->monitor.device = L"(janela)";
     s->monitor.primary = true;
     s->monitor.rect = {o.x, o.y, o.x + rc.right, o.y + rc.bottom};
+    log::debug(L"Janela de desenvolvimento em ({}, {}) - ({}, {})", o.x, o.y, o.x + rc.right, o.y + rc.bottom);
     mouse_.windowedTarget = s->hwnd();
+    inputs_.setStopWindow(s->hwnd());
     if (FAILED(s->createSwapChain(device_, rc.right, rc.bottom))) {
         return false;
     }
@@ -1304,7 +1481,7 @@ bool App::createWindowedSurface() {
         surfaces_.back()->show();
     } else {
         // --screenshot: a janela nunca aparece; deixamos a animação correr 3 s e gravamos.
-        SetTimer(controller_, TIMER_SCREENSHOT, 3000, nullptr);
+        SetTimer(controller_, TIMER_SCREENSHOT, static_cast<UINT>(options_.screenshotDelay * 1000.0), nullptr);
     }
     updatePause();
     return true;
@@ -1399,6 +1576,7 @@ void App::handleDeviceLost(HRESULT hr) {
     for (auto& s : surfaces_) s->releaseSwapChain();
     canvases_.clear();
     program_.releaseDeviceObjects();
+    inputs_.releaseDeviceObjects();
     pipeline_.reset();
     device_.reset();
     if (!recreateDeviceResources()) {
@@ -1482,6 +1660,7 @@ void App::updatePause() {
     } else if (!active) {
         stopFrameTimer();
     }
+    inputs_.setPaused(!active); // o vídeo/webcam param de descodificar
 }
 
 void CALLBACK App::onWinEvent(HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject, LONG, DWORD, DWORD) {
@@ -1592,6 +1771,16 @@ LRESULT App::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
         if (pendingLoad_.valid()) {
             applyLoadJob(pendingLoad_.get());
         }
+        loadingPath_.clear();
+        if (!queuedLoad_.empty()) {
+            const fs::path next = std::exchange(queuedLoad_, {});
+            if (!samePath(next, wallpaperPath_)) loadWallpaperAsync(next);
+        }
+        if (launcher_ && launcher_->isVisible()) launcher_->invalidate();
+        if (flyout_ && flyout_->isVisible()) flyout_->invalidate();
+        return 0;
+    case WM_APP_MODAL_FRAME:
+        onModalFrame();
         return 0;
 
     case render::WM_APP_SURFACE_LOST:
@@ -1749,7 +1938,22 @@ void App::onTimer(UINT_PTR id) {
         break;
     case TIMER_SCREENSHOT:
         KillTimer(controller_, id);
+        if (!hasWallpaper_) {
+            // Sem wallpaper válido não há nada para desenhar: sair com erro em vez de ficar à espera.
+            log::error(L"--screenshot: o wallpaper não carregou (ver erros acima)");
+            log::printConsole(L"Screenshot falhou: o wallpaper não carregou\n");
+            PostQuitMessage(1);
+            break;
+        }
         captureRequested_ = true;
+        break;
+    case TIMER_PLAYLIST:
+        advancePlaylist();
+        break;
+    case TIMER_MODAL_FRAME:
+        // Reserva: se o timer de frames foi rearmado por outro caminho, voltar a esperar por ele.
+        renderIfDue();
+        if (modalWait_ && frameTimerArmed_) SetThreadpoolWait(modalWait_, frameTimer_.get(), nullptr);
         break;
     default:
         break;

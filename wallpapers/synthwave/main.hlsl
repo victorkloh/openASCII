@@ -49,7 +49,9 @@ CellOut cell(CellIn i)
         }
 
         // Sol: disco grande no horizonte, com riscas horizontais na metade de baixo.
-        float r = scale * 0.28;
+        // Com o param "beat" (tema "beat", que liga [inputs] audio): o sol pulsa com os graves.
+        float beat = param("beat");
+        float r = scale * 0.28 * (1.0 + (audioLevels.x * 0.1 + audioLevels.w * 0.05) * beat);
         float2 sp = p - float2(par.x * size.x * 0.02, -r * 0.55);
         float d = length(sp);
         if (d < r)
@@ -76,6 +78,9 @@ CellOut cell(CellIn i)
 
         // Montanhas: uma linha de cumes à frente do sol, com contorno néon.
         float ridge = fbm(float2((i.world.x + par.x * size.x * 0.08) * 0.018, 3.0));
+        // Com "beat", os cumes viram um equalizador: cada x sobe com a sua frequência.
+        float fx01 = frac((i.world.x - center.x) / size.x + 0.5);
+        ridge += audioSpectrum(abs(fx01 * 2.0 - 1.0)) * 0.55 * beat;
         float mountainTop = -scale * (0.03 + ridge * 0.24);
         if (p.y > mountainTop)
         {
@@ -111,7 +116,7 @@ CellOut cell(CellIn i)
     o.value = 0.05;
     if (horizontal || vertical)
     {
-        o.fg = lerp(float4(0.35, 0.05, 0.4, 1), NEON_GRID, fade);
+        o.fg = lerp(float4(0.35, 0.05, 0.4, 1), NEON_GRID * (1.0 + audioLevels.w * param("beat") * 0.9), fade);
         o.value = 0.6 * fade + 0.2;
         if (horizontal) o.glyph = glyph(0);
         else

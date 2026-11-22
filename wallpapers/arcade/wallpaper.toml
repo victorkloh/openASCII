@@ -1,0 +1,28 @@
+[meta]
+name = "Arcade"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Um Breakout que joga sozinho; com o rato no ambiente de trabalho, a raquete é tua. Tech demo de um jogo inteiro com estado global num shader."
+category = "Jogos"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 60
+cell = 12
+scale = 10
+font = "Cascadia Mono"
+charset = " "
+glyphs = "█▀·."   # tijolo, raquete, rasto, grelha
+
+[colors]
+background = "#05040c"
+palette = ["#05040c", "#1b1240", "#3a2a8a", "#2f9be0", "#3fe0b0", "#f2e85b", "#ff8a3d", "#ff3d6e"]
+
+[post]
+glow = 0.22
+scanlines = 0.25
+vignette = 0.35
+
+[params]
+speed = { default = 1.0, min = 0.4, max = 3.0 }

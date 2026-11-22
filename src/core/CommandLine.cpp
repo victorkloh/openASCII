@@ -1,6 +1,8 @@
 #include "core/CommandLine.h"
 
+#include <algorithm>
 #include <charconv>
+#include <cwchar>
 #include <string>
 
 namespace ap {
@@ -53,6 +55,14 @@ ParseResult parseCommandLine(std::span<const std::wstring_view> args) {
             if (!v) return result;
             o.screenshot = std::wstring(*v);
             o.windowed = true; // renderiza numa janela escondida, nunca no desktop
+        } else if (a == L"--ui-height") {
+            const auto* v = needValue(a);
+            if (!v) return result;
+            o.uiHeight = std::clamp(_wtoi(std::wstring(*v).c_str()), 300, 6000);
+        } else if (a == L"--screenshot-delay") {
+            const auto* v = needValue(a);
+            if (!v) return result;
+            o.screenshotDelay = std::clamp(_wtof(std::wstring(*v).c_str()), 0.1, 600.0);
         } else if (a == L"--launcher") {
             o.openLauncher = true;
         } else if (a == L"--ui-screenshot") {
@@ -93,6 +103,7 @@ const wchar_t* usageText() {
            L"  --wallpaper <pasta>   carrega um wallpaper específico (Fase 3)\n"
            L"  --bench <segundos>    mede frame time, CPU e RAM\n"
            L"  --screenshot <png>    renderiza 3 s fora do ecrã (1280x720), grava um PNG e sai\n"
+           L"  --screenshot-delay <s> segundos de animação antes do --screenshot (por defeito 3)\n"
            L"  --launcher            abre o launcher ao arrancar\n"
            L"  --verbose, -v         logs detalhados, também na consola\n"
            L"  --help, -h            mostra esta ajuda\n";

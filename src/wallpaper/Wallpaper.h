@@ -43,6 +43,9 @@ struct CatalogEntry {
     std::string theme; // nome do tema (vazio = o wallpaper em si)
     fs::path preview;  // preview.png (pode não existir)
     bool userOwned = false; // está em %APPDATA% (o utilizador pode editar)
+    std::string title;       // meta.name
+    std::string description; // meta.description
+    std::string category;    // meta.category (vazio = "Outros")
 };
 
 // Chave estável e portável de um wallpaper: relativa à pasta de wallpapers quando possível

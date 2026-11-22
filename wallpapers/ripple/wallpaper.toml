@@ -3,6 +3,7 @@ name = "Ripple"
 author = "AsciiPaper"
 version = "1.0.0"
 description = "Água ASCII: o rato deixa ondas, clicar cria uma onda forte"
+category = "Ambiente"
 
 [render]
 mode = "shader"

@@ -1,0 +1,23 @@
+[meta]
+name = "Coral"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Reação-difusão de Gray-Scott: corais, manchas e labirintos que crescem sozinhos. O rato semeia. Tech demo de equações diferenciais com substeps."
+category = "Simulações"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 8
+scale = 10
+font = "Cascadia Mono"
+charset = " .:-=+*o#%@"
+substeps = 24
+
+[colors]
+background = "#02070d"
+palette = ["#02070d", "#06233a", "#0d4f6b", "#1f8f8f", "#f2735b", "#ffb38a", "#fff1e2"]
+
+[params]
+drift = { default = 1.0, min = 0.0, max = 10.0 }  # quão depressa os padrões mudam de regime

@@ -6,6 +6,7 @@
 
 #include <d2d1.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -17,6 +18,11 @@
 #include "ui/Gfx.h"
 
 namespace ap::ui {
+
+// Dois caminhos apontam para a mesma pasta/ficheiro? Como fs::equivalent, mas sem abrir
+// ficheiros em cada chamada: a forma canónica de cada caminho fica em cache (a interface
+// compara caminhos em cada repintura).
+bool samePath(const std::filesystem::path& a, const std::filesystem::path& b);
 
 using Id = uint64_t;
 Id makeId(std::wstring_view text, int index = 0);
@@ -96,10 +102,14 @@ public:
     bool dropdown(Id id, const R& r, const std::vector<std::wstring>& items, int& selected);
     bool colorPicker(Id id, const R& r, Rgba8& color); // quadrado S/V + barra de matiz + hex
     float scrollArea(Id id, const R& viewport, float contentHeight); // devolve o deslocamento
+    float scrollOffset(Id id) const { auto it = scroll_.find(id); return it == scroll_.end() ? 0.0f : it->second; }
+    void setScrollOffset(Id id, float offset) { scroll_[id] = std::max(0.0f, offset); } // scrollArea limita ao máximo
     bool sliderReleased() const { return sliderReleased_; } // um slider largado neste evento (gravar)
+    void setSynchronousImages(bool on) { synchronousImages_ = on; } // capturas: esperar pelas imagens
 
 private:
     ID2D1Brush* brush(D2D1_COLOR_F c);
+    float measureText(std::wstring_view s, const TextStyle& style);
     ID2D1Bitmap* bitmap(const std::filesystem::path& path);
     void drawFocusRing(const R& r, float radius);
 
@@ -109,11 +119,13 @@ private:
     Tokens theme_;
     ComPtr<ID2D1SolidColorBrush> brush_;
     std::unordered_map<std::wstring, ComPtr<ID2D1Bitmap>> bitmaps_;
+    std::unordered_map<std::wstring, float> widths_; // cache de textWidth
 
     Id hot_ = 0, active_ = 0, focus_ = 0;
     bool repaint_ = false;
     bool sliderReleased_ = false;
     bool blocked_ = false; // o rato está por cima de um dropdown aberto
+    bool synchronousImages_ = false;
 
     // Dropdown aberto (desenhado por cima de tudo em end()).
     Id openDropdown_ = 0;

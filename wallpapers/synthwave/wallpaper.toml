@@ -3,6 +3,7 @@ name = "Synthwave"
 author = "AsciiPaper"
 version = "1.0.0"
 description = "Pôr do sol retro: sol listrado, montanhas néon e uma grelha infinita. O rato move a câmara."
+category = "Retro"
 
 [render]
 mode = "shader"
@@ -25,3 +26,4 @@ speed    = { default = 1.0, min = 0.0, max = 4.0 }  # velocidade da grelha
 horizon  = { default = 0.56, min = 0.3, max = 0.8 } # altura do horizonte (fração do ecrã principal)
 parallax = { default = 1.0, min = 0.0, max = 3.0 }
 stars    = { default = 1.0, min = 0.0, max = 2.0 }
+beat     = { default = 0.0, min = 0.0, max = 2.0 }  # reagir à música (tema "beat", que liga o áudio)

@@ -22,6 +22,7 @@
 #include "desktop/PauseManager.h"
 #include "desktop/WorkerW.h"
 #include "input/MouseInput.h"
+#include "inputs/InputHub.h"
 #include "render/Device.h"
 #include "render/GpuTimer.h"
 #include "render/GridRenderer.h"
@@ -78,8 +79,13 @@ public:
     std::wstring lastError() const override;
     int currentFps() const override { return std::clamp(settings_.fps, 1, 240); }
     std::wstring otherAppsStatus() const override;
+    bool inPlaylist(const std::filesystem::path& path) const override;
+    void setInPlaylist(const std::filesystem::path& path, bool included) override;
     void openLauncher() override;
     void quit() override; // pode perguntar se retoma o Wallpaper Engine/Lively antes de sair
+    void quitImmediately() override { PostQuitMessage(0); }
+    std::filesystem::path loadingPath() const override { return queuedLoad_.empty() ? loadingPath_ : queuedLoad_; }
+    void setModalLoop(bool active) override;
 
 private:
     using WinEventHook = wil::unique_any<HWINEVENTHOOK, decltype(&::UnhookWinEvent), ::UnhookWinEvent>;
@@ -108,6 +114,10 @@ private:
     void loadWallpaperAsync(const std::filesystem::path& path);
     void applyLoadJob(LoadJob job);
     void onManifestChanged(); // fps, atlas, canvas
+    void configureInputs();   // [inputs] do wallpaper ativo: janelas, áudio, imagem, texto...
+    void schedulePlaylist();  // (re)arma o temporizador da playlist
+    void advancePlaylist();   // passa ao wallpaper seguinte da playlist
+    const render::GlyphAtlas* referenceAtlas() const;
     int effectiveFps() const; // FPS do fundo: o fixo das definições, ou o do wallpaper
 
     // Outras apps de wallpaper
@@ -139,6 +149,8 @@ private:
                                         double time, double dt) const;
     void drawError(render::CellCanvas& canvas, const render::MonitorSurface& ref);
     void armFrameTimer(bool restart);
+    void renderIfDue(); // desenha um frame se o timer já disparou (sem esperar pelo loop)
+    void onModalFrame(); // WM_APP_MODAL_FRAME: a espera do threadpool viu o timer disparar
     void stopFrameTimer();
     bool anyActive() const;
     void handleDeviceLost(HRESULT hr);
@@ -176,6 +188,9 @@ private:
     std::unique_ptr<ui::ConfirmDialog> dialog_;
     std::vector<desktop::OtherWallpaperApp> suspendedApps_; // o que pausámos (para retomar)
     bool quitting_ = false;
+    int modalLoops_ = 0;          // janelas nossas em loop modal (arrastar/redimensionar)
+    PTP_WAIT modalWait_ = nullptr; // durante um loop modal: espera pelo timer de frames
+    bool autostartCached_ = false; // lido do registo só ao arrancar e ao mudar
 
     // Wallpaper ativo
     std::filesystem::path wallpaperPath_; // pasta ou tema pedido
@@ -185,7 +200,11 @@ private:
     std::string errorText_;               // mostrado num canto do ecrã
     wallpaper::DirectoryWatcher watcher_;
     std::future<LoadJob> pendingLoad_;
+    std::filesystem::path loadingPath_; // a compilar agora (vazio = nada)
+    std::filesystem::path queuedLoad_;  // pedido feito durante uma compilação (o mais recente)
     std::vector<std::wstring> fontCache_;
+    inputs::InputHub inputs_;
+    bool webcamAllowedSession_ = false; // "Ligar a webcam" sem "lembrar": só até fechar a app
 
     // Tempo e rato
     wil::unique_handle frameTimer_;
@@ -202,6 +221,7 @@ private:
         float presence = 0.0f;
         POINT last{};
         bool inside = false;
+        uint32_t seenClick = 0; // último clique já entregue a este canvas
     };
     std::unordered_map<const render::CellCanvas*, MouseTrack> mouseTracks_;
 

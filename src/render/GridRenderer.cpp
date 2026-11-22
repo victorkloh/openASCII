@@ -24,10 +24,12 @@ struct alignas(16) GridConstants {
     float monitorToCanvasY;
     float canvasCellW, canvasCellH;
     int32_t canvasW, canvasH;
-    int32_t pad0, pad1;
+    int32_t slotCount, pad1;
     float background[4];
+    float post0[4]; // glow, scanlines, curvature, vignette
+    float post1[4]; // aberration, grain, tempo (s), escala do DPI
 };
-static_assert(sizeof(GridConstants) == 80);
+static_assert(sizeof(GridConstants) == 112);
 
 HRESULT createStructured(ID3D11Device* device, UINT stride, UINT count, ComPtr<ID3D11Buffer>& buffer,
                          ComPtr<ID3D11ShaderResourceView>& srv, ComPtr<ID3D11UnorderedAccessView>& uav) {
@@ -152,7 +154,7 @@ void GridRenderer::setLayout(int widthPx, int heightPx, const GlyphAtlas& atlas)
 
 HRESULT GridRenderer::draw(ID3D11Device* device, ID3D11DeviceContext* ctx, const GridPipeline& pipeline,
                            ID3D11RenderTargetView* rtv, const GlyphAtlas& atlas, const CellCanvas& canvas,
-                           const Rect& monitorRectPx, Rgba8 background) {
+                           const Rect& monitorRectPx, Rgba8 background, const PostFx& post, float time) {
     if (!constants_) {
         D3D11_BUFFER_DESC cb{};
         cb.ByteWidth = sizeof(GridConstants);
@@ -175,7 +177,17 @@ HRESULT GridRenderer::draw(ID3D11Device* device, ID3D11DeviceContext* ctx, const
     k.canvasCellH = static_cast<float>(c.cellH);
     k.canvasW = c.cols;
     k.canvasH = c.rows;
+    k.slotCount = atlas.slotCount();
     toFloat4(background, k.background);
+    k.post0[0] = post.glow;
+    k.post0[1] = post.scanlines;
+    k.post0[2] = post.curvature;
+    k.post0[3] = post.vignette;
+    k.post1[0] = post.aberration;
+    k.post1[1] = post.grain;
+    k.post1[2] = time;
+    k.post1[3] = static_cast<float>(layout_.cellH) / 16.0f; // o tamanho dos efeitos acompanha a grelha
+    k.flags = postFxActive(post) ? 1u : 0u;
     ctx->UpdateSubresource(constants_.Get(), 0, nullptr, &k, 0, 0);
 
     const D3D11_VIEWPORT vp{0, 0, static_cast<float>(width_), static_cast<float>(height_), 0, 1};
@@ -187,8 +199,8 @@ HRESULT GridRenderer::draw(ID3D11Device* device, ID3D11DeviceContext* ctx, const
     ctx->PSSetShader(pipeline.ps(), nullptr, 0);
     ID3D11Buffer* cbs[] = {constants_.Get()};
     ctx->PSSetConstantBuffers(0, 1, cbs);
-    ID3D11ShaderResourceView* srvs[] = {canvas.cellsSrv(), atlas.srv()};
-    ctx->PSSetShaderResources(0, 2, srvs);
+    ID3D11ShaderResourceView* srvs[] = {canvas.cellsSrv(), atlas.srv(), atlas.inkSrv()};
+    ctx->PSSetShaderResources(0, 3, srvs);
     ctx->Draw(3, 0); // o triângulo de ecrã inteiro
 
     // Desligar o cell buffer do pixel shader: no próximo frame o compute shader escreve nele.

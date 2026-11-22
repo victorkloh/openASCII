@@ -120,6 +120,8 @@ std::wstring AtlasDesc::key() const {
 
 void GlyphAtlas::reset() {
     srv_.Reset();
+    inkSrv_.Reset();
+    slotCount_ = 0;
     slots_.clear();
     key_.clear();
 }
@@ -225,6 +227,30 @@ HRESULT GlyphAtlas::build(ID3D11Device* device, IDWriteFactory2* dwrite, const A
         return hr;
     }
 
+    // Tinta de cada glifo: a média da cobertura da célula (o glow usa-a como intensidade).
+    std::vector<float> ink(static_cast<size_t>(count), 0.0f);
+    for (int i = 0; i < count; ++i) {
+        const int x0 = (i % columns) * cellW, y0 = (i / columns) * cellH;
+        uint32_t sum = 0;
+        for (int y = 0; y < cellH; ++y)
+            for (int x = 0; x < cellW; ++x) sum += atlas[static_cast<size_t>(y0 + y) * atlasW + x0 + x];
+        ink[static_cast<size_t>(i)] = static_cast<float>(sum) / (255.0f * static_cast<float>(cellW * cellH));
+    }
+    D3D11_BUFFER_DESC bd{};
+    bd.ByteWidth = static_cast<UINT>(ink.size() * sizeof(float));
+    bd.Usage = D3D11_USAGE_IMMUTABLE;
+    bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    bd.StructureByteStride = sizeof(float);
+    D3D11_SUBRESOURCE_DATA inkInit{ink.data(), 0, 0};
+    ComPtr<ID3D11Buffer> inkBuffer;
+    if (FAILED(hr = device->CreateBuffer(&bd, &inkInit, &inkBuffer)) ||
+        FAILED(hr = device->CreateShaderResourceView(inkBuffer.Get(), nullptr, &inkSrv_))) {
+        log::error(L"Atlas: buffer de tinta falhou: {}", win::hrToString(hr));
+        return hr;
+    }
+
+    slotCount_ = count;
     cellW_ = cellW;
     cellH_ = cellH;
     columns_ = columns;

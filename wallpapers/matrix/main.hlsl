@@ -1,5 +1,8 @@
 // Matrix — colunas de caracteres a cair. Tudo é calculado a partir de `time` e de números
 // pseudo-aleatórios por coluna (sem estado), por isso cada célula sabe sozinha o que mostrar.
+//
+// Com o param "code" = 1 e [inputs] text (o tema "code" usa o código dos próprios
+// wallpapers), cada coluna mostra um pedaço de código verdadeiro, lido de cima para baixo.
 
 // Uma "gota" numa coluna: devolve a intensidade do rasto nesta linha (0 = nada, 1 = cabeça).
 float drop(float column, float row, float seed)
@@ -48,6 +51,13 @@ CellOut cell(CellIn i)
         float flicker = floor(time * lerp(2.0, 12.0, v) + hash21(float2(column, row)) * 10.0);
         uint pick = 1u + (uint)(hash21(float2(column * 7.0 + flicker, floor(row))) * (charsetSize - 1));
         o.glyph = int(pick) + 1;
+        if (param("code") > 0.5 && textLength > 0u)
+        {
+            // Código a sério: cada coluna lê o texto a partir de um sítio seu, uma letra por linha.
+            uint start = uint(hash11(column * 1.31 + floor(time / 30.0)) * float(textLength));
+            uint ch = textChar(start + uint(floor(row)));
+            o.glyph = (ch == 10u || ch == 32u) ? 1 : asciiGlyph(ch);
+        }
         o.fg = v > 0.95 ? float4(0.85, 1.0, 0.9, 1.0) : palette(v);
     }
     return o;

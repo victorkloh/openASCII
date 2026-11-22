@@ -160,7 +160,11 @@ std::vector<CatalogEntry> listWallpapers() {
         for (const fs::path& dir : dirs) {
             const std::string name = toUtf8Path(dir.filename());
             const bool user = r > 0;
-            out.push_back({name, dir, name, "", dir / L"preview.png", user});
+            // O [meta] (nome, descrição, categoria) para a pesquisa e os grupos do launcher.
+            std::string text;
+            Manifest meta;
+            if (readFile(dir / L"wallpaper.toml", text)) meta = parseManifest(text).manifest;
+            out.push_back({name, dir, name, "", dir / L"preview.png", user, meta.name, meta.description, meta.category});
             std::vector<fs::path> themes;
             for (const auto& t : fs::directory_iterator(dir / L"themes", ec)) {
                 if (t.path().extension() == L".toml") themes.push_back(t.path());
@@ -170,7 +174,8 @@ std::vector<CatalogEntry> listWallpapers() {
                 fs::path preview = t;
                 preview.replace_extension(L".png");
                 if (!fs::exists(preview, ec)) preview = dir / L"preview.png";
-                out.push_back({name + " / " + toUtf8Path(t.stem()), t, name, toUtf8Path(t.stem()), preview, user});
+                out.push_back({name + " / " + toUtf8Path(t.stem()), t, name, toUtf8Path(t.stem()), preview, user,
+                               meta.name, meta.description, meta.category});
             }
         }
     }

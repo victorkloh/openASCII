@@ -1,0 +1,29 @@
+[meta]
+name = "HUD"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Painel ao vivo: hora em grande, CPU e RAM com histórico, e o tempo lá fora (escreve a cidade nas Definições). Tech demo de [inputs] system e weather."
+category = "Dados e média"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 10
+cell = 10
+scale = 10
+font = "Cascadia Mono"
+charset = " "
+glyphs = "┌┐└┘─│█▁▂▃▄▅▆▇·"
+
+[inputs]
+system = true   # CPU e RAM
+weather = true  # tempo real da cidade das Definições (sem cidade: nada sai do PC)
+
+[colors]
+background = "#04070b"
+# 0 fundo, 1 painel, 2-3 apagado, 4 destaque, 5 claro, 6 quente (alertas, sol), 7 texto
+palette = ["#04070b", "#0b1620", "#1d3a47", "#2d5a6b", "#3ec7d6", "#7ff2e6", "#ffb454", "#e8f6f8"]
+
+[post]
+glow = 0.35
+vignette = 0.4

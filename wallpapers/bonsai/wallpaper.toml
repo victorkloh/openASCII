@@ -1,0 +1,26 @@
+[meta]
+name = "Bonsai"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Um bonsai que cresce devagar (um diferente cada dia) e muda com as estações do ano real. Tech demo de estado global em células reservadas."
+category = "Ambiente"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 15
+cell = 11
+scale = 10
+font = "Cascadia Mono"
+charset = " "
+glyphs = "#\\|/_%█.*&,"   # 0 # · 1 \ · 2 | · 3 / · 4 _ · 5 terra · 6 tronco · 7 neve · 8 flor · 9 folha · 10 folha a cair
+
+[colors]
+background = "#07080a"
+# 0 céu de noite, 1 céu de dia, 2-3 vaso, 4 madeira escura, 5 madeira, 6-7 flores, 8 branco
+palette = ["#07080a", "#121722", "#3b2a22", "#7a4a32", "#5a3b26", "#9b6a3f", "#f2a7c3", "#ffd7e4"]
+
+[params]
+minutes = { default = 8.0, min = 0.5, max = 240.0 } # quanto tempo demora a crescer
+size    = { default = 1.0, min = 0.5, max = 1.8 }
+seed    = { default = 0.0, min = 0.0, max = 100.0 } # muda para ver outra árvore no mesmo dia

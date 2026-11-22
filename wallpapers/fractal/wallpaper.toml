@@ -1,0 +1,27 @@
+[meta]
+name = "Fractal"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Zoom sem fim no conjunto de Mandelbrot, a visitar pontos famosos. Tech demo de matemática por célula."
+category = "Simulações"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 7
+scale = 10
+font = "Cascadia Mono"
+charset = " .:-=+*#%@"
+
+[colors]
+background = "#030208"
+# a paleta roda ao longo das bandas: põe a primeira e a última cor parecidas para não haver costura
+palette = ["#0b0420", "#3a0f6b", "#b5179e", "#f72585", "#ff9e00", "#ffe066", "#4cc9f0", "#0b0420"]
+
+[params]
+dwell   = { default = 40.0, min = 5.0, max = 300.0 } # segundos em cada ponto
+depth   = { default = 1.0,  min = 0.05, max = 1.0 }  # até onde mergulha (1 = 20000x)
+bands   = { default = 1.0,  min = 0.2, max = 5.0 }   # largura das bandas de cor
+cycle   = { default = 1.0,  min = 0.0, max = 10.0 }  # velocidade a que as cores rodam
+quality = { default = 1.0,  min = 0.3, max = 2.0 }   # iterações (mais = mais detalhe, mais GPU)

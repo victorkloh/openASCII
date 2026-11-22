@@ -3,6 +3,7 @@ name = "Fire"
 author = "AsciiPaper"
 version = "1.0.0"
 description = "Fogo ASCII que sobe do fundo de cada ecrã. O rato acende chamas; clicar faz uma explosão."
+category = "Retro"
 
 [render]
 mode = "shader"

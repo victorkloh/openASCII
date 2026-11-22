@@ -66,7 +66,30 @@ Legenda: ✅ feito e verificado · 🟡 feito, falta verificação manual ou tem
 ## 12. "Releia os prompts e faça uma checklist"
 - ✅ Este ficheiro.
 
+## 13. "Corrige a quebra de FPS com o rato sobre as janelas (e a janela da app)"
+- ✅ Causa encontrada e medida: o ciclo de mensagens ficava preso entre rato e pintura (o fundo deixava de desenhar), mais loops modais (arrastar, menus, botões da barra de título) e pinturas caras.
+- ✅ Corrigido: frames entre mensagens, threadpool durante loops modais, botões da barra sem loop, pinturas limitadas e mais leves, previews em segundo plano. Medido com hover simulado, menu modal e trocas: 30 fps estáveis, 0 engasgos.
+- 🟡 Hover sobre janelas de OUTRAS apps com o rato real não foi medido aqui (o input injetado não move o cursor nesta máquina).
+
+## 14. "Implementa as ideias de 2★+, um wallpaper por ideia, como tech demos"
+- ✅ 15 tech demos + 3 temas novos (ver a tabela de estado em `ideias.md`), todos verificados com screenshot e `--bench` (todos abaixo de 0,3 ms de GPU por frame a 1264x681).
+- ✅ Motor: `[inputs]` (janelas, ícones, áudio, imagem/vídeo/webcam, sistema, tempo real, texto), `[post]`, `substeps`, playlist, opções no launcher.
+- ⏳ Por fazer (com motivo em `ideias.md`): geração por IA (5), modelos `.obj` (4), galeria (10), Lua (13), horários na playlist (14), wallpaper por monitor (15), captura de janelas (21), FIGlet (24).
+- 🟡 Webcam e tempo real não testados com dados reais: a câmara só liga com a tua autorização e a meteorologia precisa da tua cidade.
+
+## 15. "Menu rápido da bandeja sai do ecrã com tantos efeitos; manter o minimalismo"
+- ✅ Grelha de 3 colunas com scroll (máx. ~3,5 linhas), altura sempre dentro da área de trabalho, ajustes recolhidos, pausa no cabeçalho, teclado (setas/Enter/Esc). 2011 → ~490 DIP.
+- 🟡 A skill "impeccable" não está instalada; usei a skill apple-design.
+
+## 16. Fractal, Aplicar com atraso, presets de caracteres, 60 FPS, neve, entradas na UI, CRT em qualquer wallpaper, pesquisa
+- ✅ Fractal sem rato.
+- ✅ Aplicar: causa encontrada (pedido perdido durante uma compilação) + fila, "A preparar" e cache de shaders.
+- ✅ Caracteres: wallpapers com caracteres próprios explicam que os conjuntos não se aplicam; conjuntos já não ficam escondidos.
+- ✅ 60 FPS por defeito, com `fixedStep()` nas simulações.
+- ✅ Neve: vento sem saltos; parâmetros com efeito imediato (os teus ajustes ritmo 0 / altura 1 / derreter 0 só travavam o futuro).
+- ✅ Webcam e cidade na página do wallpaper; efeitos de ecrã em qualquer wallpaper; pesquisa e grupos por tipo.
+
 ## O que fica para depois (da spec original)
 - ⏳ Fase 4: backend Lua + natives (`fluid`, `particles`, `life`).
 - ⏳ Fase 5: wallpaper diferente por monitor; guia passo a passo no README já existe em `docs/CREATING_WALLPAPERS.md`.
-- ⏳ Glow/bloom opcional; roda do rato (`mouse.scroll`) deixou de ser lida com a mudança para amostragem.
+- ✅ Glow/bloom opcional (v0.5, `[post]`). ⏳ Roda do rato (`mouse.scroll`) deixou de ser lida com a mudança para amostragem.

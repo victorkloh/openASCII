@@ -40,8 +40,29 @@ struct alignas(16) FrameConstants {
     float localHour, localMinute, localSecond;      // hora local (segundos com fração)
     float mousePresence;                            // 0..1: o rato está (ou esteve há pouco) no fundo
     uint32_t year, month, day, weekday;              // data local (weekday 0 = domingo)
+    uint32_t clicked;                                // 1 só no 1º passo do frame com um clique novo
+    uint32_t passIndex, passCount;
+    uint32_t obstacleCount;
+    float spectrum[64];                              // áudio, 0..1
+    float audioLevels[4];                            // grave, médios, agudos, batida
+    float systemStats[4];                            // CPU, RAM
+    float weather[4];                                // chuva mm/h, nuvens 0..1, vento m/s, temperatura
+    float weather2[4];                               // dia (0/1), elevação do sol, válido, código WMO
+    float sourceW, sourceH;
+    uint32_t textLength, windowCount;
+    float textInfo[4];                               // "lines:": idade da linha (s), índice, total, intervalo
+    uint32_t atlasSlots;                             // glifos no atlas (limite dos glifos brutos)
+    uint32_t pad[3];
 };
-static_assert(sizeof(FrameConstants) == 480, "tem de bater com o cbuffer Frame do prelude.hlsl");
+static_assert(sizeof(FrameConstants) == 864, "tem de bater com o cbuffer Frame do prelude.hlsl");
+
+// Recursos opcionais que o wallpaper pode ler (nullptr = não usa).
+struct ShaderInputs {
+    ID3D11ShaderResourceView* obstacles = nullptr; // StructuredBuffer<int4>
+    ID3D11ShaderResourceView* text = nullptr;      // StructuredBuffer<uint>
+    ID3D11ShaderResourceView* source = nullptr;    // Texture2D<float4>
+    ID3D11SamplerState* sampler = nullptr;
+};
 
 // Thread-safe: não toca no dispositivo. Pode correr num thread de trabalho.
 render::CompiledShader compileWallpaperShader(const Manifest& manifest, const std::string& userSource,
@@ -57,7 +78,8 @@ public:
     void releaseDeviceObjects(); // mantém o blob, para recriar depois de um device lost
     bool valid() const { return cs_ != nullptr; }
 
-    void dispatch(ID3D11DeviceContext* ctx, render::CellCanvas& canvas, const FrameConstants& frame);
+    // Corre `frame.passCount` passos seguidos (o estado alterna entre passos: cada passo vê o anterior).
+    void dispatch(ID3D11DeviceContext* ctx, render::CellCanvas& canvas, FrameConstants frame, const ShaderInputs& in);
 
 private:
     ComPtr<ID3DBlob> blob_;

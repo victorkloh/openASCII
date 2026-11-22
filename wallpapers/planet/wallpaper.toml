@@ -1,0 +1,25 @@
+[meta]
+name = "Planet"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Um planeta procedural a rodar: continentes, nuvens, gelo, cidades à noite e o Sol da estação do ano real. O rato roda-o. Tech demo de esferas e ruído 3D."
+category = "3D e espaço"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 8
+scale = 10
+font = "Cascadia Mono"
+charset = " .,:;-~=+*oO#%@"
+
+[colors]
+background = "#010208"
+palette = ["#010208", "#0a1028", "#2a3a6a", "#7d8fbf", "#d7deef", "#ffffff"]
+
+[params]
+speed  = { default = 1.0,  min = 0.0, max = 10.0 }
+size   = { default = 1.0,  min = 0.4, max = 1.6 }
+sea    = { default = 0.52, min = 0.35, max = 0.7 }  # nível do mar (mais alto = menos terra)
+clouds = { default = 1.0,  min = 0.0, max = 1.5 }

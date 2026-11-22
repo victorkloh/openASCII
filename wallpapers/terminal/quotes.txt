@@ -1,0 +1,41 @@
+# Uma citação por linha: "texto|autor". Linhas começadas por # são ignoradas.
+# Podes editar este ficheiro (ou apontar [inputs] text para outro): o terminal escreve
+# uma de cada vez, a rodar a cada text_interval segundos.
+Não é porque as coisas são difíceis que não ousamos; é porque não ousamos que elas são difíceis.|Séneca
+A sorte é o que acontece quando a preparação encontra a oportunidade.|Séneca
+Enquanto adiamos, a vida passa.|Séneca
+Tens poder sobre a tua mente, não sobre os acontecimentos. Percebe isto e encontrarás força.|Marco Aurélio
+A felicidade da tua vida depende da qualidade dos teus pensamentos.|Marco Aurélio
+O que fazemos agora ecoa na eternidade.|Marco Aurélio
+Não é o que acontece que nos perturba, mas o que pensamos sobre o que acontece.|Epicteto
+Uma viagem de mil léguas começa com um único passo.|Lao Tsé
+Quem conhece os outros é inteligente; quem se conhece a si mesmo é sábio.|Lao Tsé
+Nada é mais macio do que a água, e no entanto nada a vence contra o que é duro.|Lao Tsé
+Não importa quão devagar vais, desde que não pares.|Confúcio
+Ninguém se banha duas vezes no mesmo rio.|Heraclito
+Só sei que nada sei.|Sócrates
+Somos o que fazemos repetidamente. A excelência não é um ato, mas um hábito.|Aristóteles
+Tudo vale a pena se a alma não é pequena.|Fernando Pessoa
+O poeta é um fingidor. Finge tão completamente que chega a fingir que é dor a dor que deveras sente.|Fernando Pessoa
+Navegar é preciso; viver não é preciso.|Fernando Pessoa
+Para ser grande, sê inteiro: nada teu exagera ou exclui.|Fernando Pessoa
+O amor é fogo que arde sem se ver.|Luís de Camões
+Mudam-se os tempos, mudam-se as vontades.|Luís de Camões
+E se mais mundo houvera, lá chegara.|Luís de Camões
+O homem é o que ele faz de si mesmo, todos os dias.|Eça de Queirós
+A simplicidade é o último grau de sofisticação.|Leonardo da Vinci
+Aprender é a única coisa de que a mente nunca se cansa, nunca tem medo e nunca se arrepende.|Leonardo da Vinci
+E, no entanto, move-se.|Galileu Galilei
+Se vi mais longe, foi por estar sobre os ombros de gigantes.|Isaac Newton
+Não é o mais forte que sobrevive, nem o mais inteligente, mas o que melhor se adapta à mudança.|Charles Darwin
+A imaginação é mais importante do que o conhecimento.|Albert Einstein
+A vida é como andar de bicicleta: para manter o equilíbrio, tens de continuar em movimento.|Albert Einstein
+A máquina analítica tece padrões algébricos tal como o tear tece flores e folhas.|Ada Lovelace
+Só conseguimos ver um pouco à frente, mas vemos muito que precisa de ser feito.|Alan Turing
+O segredo de avançar é começar.|Mark Twain
+Sê tu mesmo; todos os outros já existem.|Oscar Wilde
+Tudo o que temos de decidir é o que fazer com o tempo que nos é dado.|J. R. R. Tolkien
+Nem todos os que vagueiam estão perdidos.|J. R. R. Tolkien
+Há uma rachadura em tudo. É assim que a luz entra.|Provérbio
+Cai sete vezes, levanta-te oito.|Provérbio japonês
+Devagar se vai ao longe.|Provérbio português

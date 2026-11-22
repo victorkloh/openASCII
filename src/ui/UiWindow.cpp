@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace ap::ui {
 
@@ -109,7 +110,46 @@ D2D1_POINT_2F UiWindow::toDip(LPARAM lp) const {
     return {GET_X_LPARAM(lp) / s, GET_Y_LPARAM(lp) / s};
 }
 
+namespace {
+// Diagnóstico: quanto tempo a interface ocupa o thread de UI (que também desenha o wallpaper).
+int g_paints = 0;
+double g_paintMs = 0, g_paintMaxMs = 0;
+LONGLONG qpcTicks() {
+    LARGE_INTEGER li;
+    QueryPerformanceCounter(&li);
+    return li.QuadPart;
+}
+double qpcMs(LONGLONG ticks) {
+    static const double freq = [] {
+        LARGE_INTEGER f;
+        QueryPerformanceFrequency(&f);
+        return static_cast<double>(f.QuadPart);
+    }();
+    return ticks * 1000.0 / freq;
+}
+} // namespace
+
+constexpr double kMinPaintIntervalMs = 14.0; // ~70 pinturas/s no máximo
+constexpr UINT_PTR kPaintTimerId = 0xA5C1;
+
+UiPaintStats takeUiPaintStats() {
+    UiPaintStats s{g_paints, g_paintMs, g_paintMaxMs};
+    g_paints = 0;
+    g_paintMs = g_paintMaxMs = 0;
+    return s;
+}
+
 void UiWindow::paint() {
+    const LONGLONG paintStart = qpcTicks();
+    struct Measure {
+        LONGLONG start;
+        ~Measure() {
+            const double ms = qpcMs(qpcTicks() - start);
+            ++g_paints;
+            g_paintMs += ms;
+            g_paintMaxMs = std::max(g_paintMaxMs, ms);
+        }
+    } measure{paintStart};
     RECT rc{};
     GetClientRect(hwnd_, &rc);
     if (rc.right <= 0 || rc.bottom <= 0) return;
@@ -118,8 +158,11 @@ void UiWindow::paint() {
         const auto props = D2D1::RenderTargetProperties(
             D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
             dpi, dpi);
-        const auto hwndProps =
-            D2D1::HwndRenderTargetProperties(hwnd_, D2D1::SizeU(static_cast<UINT32>(rc.right), static_cast<UINT32>(rc.bottom)));
+        // IMMEDIATELY: sem isto, cada EndDraw espera pelo vsync (até 16 ms) e, como este thread
+        // também desenha o wallpaper, mexer o rato sobre a interface fazia o fundo perder FPS.
+        const auto hwndProps = D2D1::HwndRenderTargetProperties(
+            hwnd_, D2D1::SizeU(static_cast<UINT32>(rc.right), static_cast<UINT32>(rc.bottom)),
+            D2D1_PRESENT_OPTIONS_IMMEDIATELY);
         if (FAILED(gfx_.d2d()->CreateHwndRenderTarget(props, hwndProps, &rt_))) return;
         rt_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
         ui_.resetDeviceResources();
@@ -141,6 +184,13 @@ void UiWindow::paint() {
         invalidate();
     }
     input_.clearTransient();
+    // Previews ainda a descodificar noutro thread: voltar a pintar daqui a pouco.
+    // Previews ainda a descodificar ou um wallpaper a compilar (o indicador anima): repintar daqui a pouco.
+    const bool animating = !app_.loadingPath().empty();
+    if ((gfx_.imagesPending() || animating) && !paintDeferred_) {
+        paintDeferred_ = true;
+        SetTimer(hwnd_, kPaintTimerId, animating ? 110 : 30, nullptr);
+    }
     // Um clique pode mudar o estado depois de a parte que o mostra já estar desenhada:
     // uma repintura extra (sem input) acerta tudo. Só uma, para não entrar em ciclo.
     if ((hadEvent || ui_.repaintRequested()) && !followUp_) {
@@ -167,9 +217,11 @@ HRESULT UiWindow::renderToPngImpl(const std::wstring& path, float widthDip, floa
     Input none;
     rt->BeginDraw();
     rt->Clear(t.bg);
+    ui_.setSynchronousImages(true);
     ui_.begin(rt.Get(), none, t);
     build(ui_, widthDip, heightDip);
     ui_.end();
+    ui_.setSynchronousImages(false);
     if (FAILED(hr = rt->EndDraw())) return hr;
     ui_.resetDeviceResources();
 
@@ -210,12 +262,66 @@ LRESULT UiWindow::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
     case WM_PAINT: {
         PAINTSTRUCT ps;
         BeginPaint(hwnd_, &ps);
-        paint();
+        const double sinceLast = qpcMs(qpcTicks() - lastPaintQpc_);
+        if (sinceLast < kMinPaintIntervalMs) {
+            // Cedo demais: dar a janela por pintada agora e pintar quando o intervalo acabar.
+            if (!paintDeferred_) {
+                paintDeferred_ = true;
+                SetTimer(hwnd_, kPaintTimerId, static_cast<UINT>(std::ceil(kMinPaintIntervalMs - sinceLast)), nullptr);
+            }
+        } else {
+            paint();
+            lastPaintQpc_ = qpcTicks();
+        }
         EndPaint(hwnd_, &ps);
         return 0;
     }
+    case WM_TIMER:
+        if (wp != kPaintTimerId) break;
+        KillTimer(hwnd_, kPaintTimerId);
+        paintDeferred_ = false;
+        invalidate();
+        return 0;
     case WM_ERASEBKGND:
         return 1;
+    case WM_NCLBUTTONDOWN:
+        if (wp == HTMINBUTTON || wp == HTMAXBUTTON || wp == HTCLOSE) {
+            // O DefWindowProc seguiria o botão num loop que só lê mensagens do rato: nem timers
+            // nem mensagens publicadas passam, e o fundo congelava ~100 ms por clique (medido).
+            // Fazemos como o Windows, mas sem loop: a ação acontece ao largar no mesmo botão.
+            captionPressed_ = static_cast<int>(wp);
+            return 0;
+        }
+        [[fallthrough]];
+    case WM_NCRBUTTONDOWN:
+    case WM_SYSCOMMAND: {
+        // Arrastar, redimensionar e o menu de sistema correm um loop modal do Windows DENTRO
+        // do DefWindowProc (medido: 0,6 a 1,3 s a arrastar o launcher), e o nosso loop
+        // principal fica parado. Enquanto durar, a app desenha o wallpaper por outro caminho.
+        // Pode aninhar (o clique na barra de título gera um WM_SYSCOMMAND SC_MOVE): a app
+        // conta as entradas.
+        // Fechar pelo X ou Alt+F4 passa por SC_CLOSE; um WM_CLOSE sem isto vem de fora (taskkill).
+        const bool sysClose = msg == WM_SYSCOMMAND && (wp & 0xFFF0) == SC_CLOSE;
+        if (sysClose) closingByUser_ = true;
+        app_.setModalLoop(true);
+        const LRESULT r = DefWindowProcW(hwnd_, msg, wp, lp);
+        app_.setModalLoop(false);
+        if (sysClose) closingByUser_ = false;
+        return r;
+    }
+    case WM_NCLBUTTONUP:
+        if (captionPressed_ != 0) {
+            const int pressed = std::exchange(captionPressed_, 0);
+            if (static_cast<int>(wp) == pressed) {
+                const WPARAM cmd = pressed == HTMINBUTTON ? SC_MINIMIZE
+                                   : pressed == HTCLOSE   ? SC_CLOSE
+                                   : IsZoomed(hwnd_)      ? SC_RESTORE
+                                                          : SC_MAXIMIZE;
+                PostMessageW(hwnd_, WM_SYSCOMMAND, cmd, 0);
+            }
+            return 0;
+        }
+        break;
     case WM_SIZE:
         if (rt_) rt_->Resize(D2D1::SizeU(LOWORD(lp), HIWORD(lp)));
         invalidate();
@@ -257,6 +363,7 @@ LRESULT UiWindow::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
         invalidate();
         return 0;
     case WM_LBUTTONUP:
+        captionPressed_ = 0; // carregou num botão da barra de título e largou dentro da janela
         ReleaseCapture();
         input_.mouse = toDip(lp);
         input_.down = false;

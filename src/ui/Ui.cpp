@@ -6,6 +6,26 @@
 
 namespace ap::ui {
 
+bool samePath(const std::filesystem::path& a, const std::filesystem::path& b) {
+    if (a.empty() || b.empty()) return false;
+    if (a == b) return true;
+    static std::unordered_map<std::wstring, std::wstring> keys; // só o thread de UI usa isto
+    auto key = [](const std::filesystem::path& p) -> const std::wstring& {
+        auto it = keys.find(p.native());
+        if (it != keys.end()) return it->second;
+        if (keys.size() > 1024) keys.clear();
+        std::error_code ec;
+        std::filesystem::path c = std::filesystem::weakly_canonical(p, ec);
+        if (ec) c = std::filesystem::absolute(p, ec).lexically_normal();
+        std::wstring k = c.native();
+        while (k.size() > 3 && (k.back() == L'\\' || k.back() == L'/')) k.pop_back();
+        CharLowerBuffW(k.data(), static_cast<DWORD>(k.size()));
+        return keys.emplace(p.native(), std::move(k)).first->second;
+    };
+    const std::wstring ka = key(a); // cópia: a segunda chamada pode limpar a cache
+    return ka == key(b);
+}
+
 namespace {
 
 D2D1_COLOR_F hex(uint32_t rgb, float a = 1.0f) {
@@ -212,6 +232,21 @@ void Ui::icon(const R& r, wchar_t glyph, D2D1_COLOR_F c, float size) {
 }
 
 float Ui::textWidth(std::wstring_view s, const TextStyle& style) {
+    // Medir cria um IDWriteTextLayout (caro); a interface pede as mesmas larguras em cada
+    // repintura, por isso ficam em cache (texto + tamanho + peso + família).
+    std::wstring key(s);
+    key += static_cast<wchar_t>(0);
+    key += std::to_wstring(static_cast<int>(style.size * 16.0f));
+    key += static_cast<wchar_t>(L'0' + static_cast<int>(style.kind));
+    key += std::to_wstring(static_cast<int>(style.weight));
+    if (auto it = widths_.find(key); it != widths_.end()) return it->second;
+    if (widths_.size() > 4096) widths_.clear();
+    const float w = measureText(s, style);
+    widths_.emplace(std::move(key), w);
+    return w;
+}
+
+float Ui::measureText(std::wstring_view s, const TextStyle& style) {
     ComPtr<IDWriteTextLayout> layout;
     if (FAILED(gfx_.dwrite()->CreateTextLayout(s.data(), static_cast<UINT32>(s.size()), gfx_.format(style), 10000,
                                                100, &layout))) {
@@ -226,7 +261,9 @@ ID2D1Bitmap* Ui::bitmap(const std::filesystem::path& path) {
     const std::wstring key = path.wstring();
     if (auto it = bitmaps_.find(key); it != bitmaps_.end()) return it->second.Get();
     ComPtr<ID2D1Bitmap> bmp;
-    if (IWICBitmapSource* src = gfx_.image(path)) rt_->CreateBitmapFromWicBitmap(src, nullptr, &bmp);
+    IWICBitmapSource* src = gfx_.image(path, synchronousImages_);
+    if (!src && gfx_.imagePending(path)) return nullptr; // ainda a descodificar: placeholder por agora
+    if (src) rt_->CreateBitmapFromWicBitmap(src, nullptr, &bmp);
     bitmaps_[key] = bmp;
     return bmp.Get();
 }

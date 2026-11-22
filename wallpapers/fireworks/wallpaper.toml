@@ -3,6 +3,7 @@ name = "Fireworks"
 author = "AsciiPaper"
 version = "1.0.0"
 description = "Fogo de artifício sobre a cidade, com rastos e brilho no céu. Clica para lançar o teu."
+category = "Ambiente"
 
 [render]
 mode = "shader"
@@ -11,7 +12,7 @@ fps = 40
 cell = 11
 scale = 10
 font = "Cascadia Mono"
-charset = " .,:;+*"
+charset = " "   # desenha só com os seus próprios caracteres (glyphs)
 # 0 * 1 + 2 · 3 | (foguete) 4 ▀ 5 █ (prédios) 6 ▪ (janela)
 glyphs = "*+·|▀█▪"
 

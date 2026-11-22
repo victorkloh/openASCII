@@ -7,6 +7,38 @@
 >
 > Legenda: impacto ★ (1 a 5) · esforço ● (1 = horas, 5 = semanas)
 
+## Estado (v0.5.0)
+
+As ideias com 2★ ou mais foram implementadas como **tech demos**: um wallpaper por ideia, comentado para
+servir de exemplo a quem quiser criar os seus. Ver `docs/CREATING_WALLPAPERS.md`, secção 6.
+
+| # | Estado | Onde |
+|---|---|---|
+| 1 | ✅ feito | `photo` (imagem, GIF, vídeo, o wallpaper do Windows) + "Escolher imagem ou vídeo" no launcher |
+| 2 | ✅ feito | `snow` (neve que assenta nas janelas e cai quando as mexes) |
+| 3 | ✅ feito | `spectrum` + tema `synthwave/beat` |
+| 4 | ✅ cenas raymarched (`temple`) · ⏳ modelos `.obj` por fazer | `temple` |
+| 5 | ⏳ por fazer | precisa de uma chave da API de IA e de um fluxo de revisão do código gerado |
+| 6 | ✅ feito | `hud` (CPU, RAM, tempo real, sol) + tema `valley/weather`; cidade nas Definições |
+| 7 | ✅ feito | `sandbox` (areia, água, pedra; pintar com o rato) |
+| 8 | ✅ feito | `fluid` (24 passos por frame) e `render.substeps` para qualquer wallpaper |
+| 9 | ✅ feito | secção `[post]` (glow, CRT, vinheta, aberração, grão) em qualquer wallpaper; ver `terminal`, `hud` |
+| 10 | ⏳ por fazer | precisa de um servidor e de moderação |
+| 11 | ✅ feito | `coral` (Gray-Scott) e `life` (Conway) |
+| 12 | ✅ feito | `terminal` + `[inputs] text` (literal, `file:`, `folder:`, `lines:`) |
+| 13 | ⏳ por fazer | backend Lua (Fase 4 da spec); hoje a lógica com estado faz-se com células reservadas (`arcade`, `bonsai`) |
+| 14 | ✅ playlist (minutos, ordem aleatória) · ⏳ horários por hora do dia | Definições + "Incluir na playlist" |
+| 15 | ⏳ por fazer | exige um programa/atlas por monitor (refatorar o render) |
+| 16 | ✅ feito | `fractal` (Mandelbrot com zoom contínuo) |
+| 17 | ✅ feito (planeta procedural) | `planet` |
+| 18 | ✅ feito | `bonsai` |
+| 19 | ✅ feito | `mirror` (só liga com autorização) |
+| 20 | ✅ feito | tema `matrix/code` |
+| 21 | ⏳ por fazer | captura de janelas (Windows.Graphics.Capture) |
+| 22 | ✅ feito | `arcade` (Breakout que joga sozinho) |
+| 23 | ✅ ícones como obstáculos (`[inputs] icons`, a neve assenta neles) | `snow` |
+| 24 | ⏳ por fazer (há a fonte grande 5x7: `bigFontPixel`) | `hud`, `clock` |
+
 ## Resumo
 
 | # | Ideia | Impacto | Esforço | Porquê nesta posição |

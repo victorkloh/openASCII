@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(AsciiPaper
-    VERSION 0.4.0
+    VERSION 0.5.0
     DESCRIPTION "Motor de wallpapers ASCII reativos para Windows"
     LANGUAGES CXX RC)
 
@@ -72,6 +72,10 @@ add_executable(asciipaper WIN32
     src/desktop/WorkerW.cpp
     src/input/DesktopHitTest.cpp
     src/input/MouseInput.cpp
+    src/inputs/AudioCapture.cpp
+    src/inputs/InputHub.cpp
+    src/inputs/LiveData.cpp
+    src/inputs/SourceMedia.cpp
     src/render/Device.cpp
     src/render/GlyphAtlas.cpp
     src/render/GpuTimer.cpp
@@ -95,7 +99,8 @@ target_include_directories(asciipaper PRIVATE
     src res shaders ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(asciipaper PRIVATE
     asciipaper_core WIL::WIL tomlplusplus::tomlplusplus
-    d3d11 dxgi d3dcompiler d2d1 dwrite windowscodecs dwmapi shcore shell32 user32 wtsapi32 advapi32 ole32)
+    d3d11 dxgi d3dcompiler d2d1 dwrite windowscodecs dwmapi shcore shell32 user32 wtsapi32 advapi32 ole32 oleaut32
+    mfplat mfreadwrite mfuuid mf winhttp propsys)
 # O manifesto (PerMonitorV2, UTF-8, Win10) vem do app.rc; o linker não gera outro.
 target_link_options(asciipaper PRIVATE /MANIFEST:NO)
 set_target_properties(asciipaper PROPERTIES

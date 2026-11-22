@@ -1,0 +1,27 @@
+[meta]
+name = "Temple"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Uma cena 3D em tempo real (raymarching): templo, sombras suaves, oclusão ambiente e nevoeiro. O rato roda a câmara. Tech demo do 3D."
+category = "3D e espaço"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 9
+scale = 10
+font = "Cascadia Mono"
+charset = " .,:;-=+*cxoO#%@"
+
+[colors]
+background = "#07060d"
+# céu escuro -> pedra -> mármore quente -> ouro -> luz da esfera
+palette = ["#07060d", "#141428", "#3a3550", "#6b5a6e", "#c98f52", "#f2c46d", "#f7ead6", "#fffaf0"]
+
+[params]
+orbit    = { default = 1.0, min = 0.0, max = 5.0 }  # velocidade da órbita da câmara
+zoom     = { default = 1.0, min = 0.5, max = 2.5 }
+sunspeed = { default = 1.0, min = 0.0, max = 10.0 } # o sol a rodar (as sombras mexem-se)
+fog      = { default = 1.0, min = 0.0, max = 5.0 }
+exposure = { default = 1.3, min = 0.5, max = 3.0 }  # brilho geral

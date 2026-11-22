@@ -18,6 +18,9 @@ struct WallpaperInfo {
     std::filesystem::path path;
     std::filesystem::path preview;
     bool userOwned = false;
+    std::wstring title;       // nome bonito (meta.name)
+    std::wstring description;
+    std::wstring category;    // vazio = "Outros"
 };
 
 struct GlobalSettings {
@@ -30,6 +33,11 @@ struct GlobalSettings {
     int fps = 0;              // FPS do fundo: 0 = automático
     int otherAppsOnStart = 0; // 0 perguntar, 1 pausar sempre, 2 ignorar
     int otherAppsOnExit = 0;  // 0 perguntar, 1 retomar sempre, 2 deixar pausado
+    std::wstring weatherCity; // tempo real dos wallpapers (vazio = nunca vai à internet)
+    bool webcamAllowed = false;
+    int playlistMinutes = 0;  // 0 = playlist desligada
+    bool playlistShuffle = false;
+    int playlistCount = 0;    // só leitura: quantos wallpapers estão na playlist
 };
 
 class AppControl {
@@ -40,6 +48,9 @@ public:
     virtual std::vector<WallpaperInfo> wallpapers() = 0;
     virtual std::filesystem::path activePath() const = 0;
     virtual void activate(const std::filesystem::path& path) = 0;
+    // O wallpaper que está a ser preparado (compilado) agora, ou vazio. A interface mostra
+    // "A preparar" para ninguém pensar que o clique se perdeu.
+    virtual std::filesystem::path loadingPath() const = 0;
 
     // Inspecionar um wallpaper sem o ativar: o manifest com tema (base) e com os ajustes
     // do utilizador por cima (effective).
@@ -66,9 +77,15 @@ public:
     virtual int currentFps() const = 0;         // FPS a que o fundo está a desenhar agora
     virtual std::wstring otherAppsStatus() const = 0; // ex.: "Wallpaper Engine pausado" (vazio = nada)
 
+    // Playlist (trocar de wallpaper sozinho de N em N minutos).
+    virtual bool inPlaylist(const std::filesystem::path& path) const = 0;
+    virtual void setInPlaylist(const std::filesystem::path& path, bool included) = 0;
+
     // Janelas
     virtual void openLauncher() = 0;
-    virtual void quit() = 0;
+    virtual void quit() = 0;          // pelo utilizador: pode perguntar se retoma outras apps
+    virtual void quitImmediately() = 0; // pedido de fora (taskkill): sai já, sem perguntas
+    virtual void setModalLoop(bool active) = 0; // uma janela nossa entrou/saiu de um loop modal
 };
 
 } // namespace ap::ui

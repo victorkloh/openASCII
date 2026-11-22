@@ -15,7 +15,11 @@ CellOut cell(CellIn i)
     float cooling = 1.25 / max(param("height") * monH, 4.0);
 
     float heat;
-    if (fromBottom < 1.0)
+    if (!fixedStep(30.0))
+    {
+        heat = prev(c).x; // passos a 30 por segundo: as chamas sobem igual a qualquer FPS
+    }
+    else if (fromBottom < 1.0)
     {
         // A fonte: tremeluz devagar ao longo do fundo.
         float flicker = noise(float2(i.world.x * 0.35, time * 2.0));

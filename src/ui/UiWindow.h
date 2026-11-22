@@ -14,6 +14,13 @@
 
 namespace ap::ui {
 
+// Diagnóstico: pinturas da interface desde a última chamada (o --bench/--verbose mostra-as).
+struct UiPaintStats {
+    int paints = 0;
+    double totalMs = 0, maxMs = 0;
+};
+UiPaintStats takeUiPaintStats();
+
 // A cor de destaque da interface vem da paleta do wallpaper ativo.
 Rgba8 accentFromPalette(const std::vector<Rgba8>& palette);
 bool systemUsesDarkTheme();
@@ -29,6 +36,9 @@ public:
     void invalidate() const;
 
 protected:
+    // O WM_CLOSE que está a ser tratado veio do utilizador (X, Alt+F4)? Senão é um pedido de
+    // fora, como "taskkill" sem /f de um instalador: a app deve sair.
+    bool closingByUser() const { return closingByUser_; }
     UiWindow(Gfx& gfx, AppControl& app) : gfx_(gfx), app_(app), ui_(gfx) {}
 
     bool createWindow(HINSTANCE instance, const wchar_t* className, const wchar_t* title, DWORD style,
@@ -62,6 +72,12 @@ private:
     ComPtr<ID2D1HwndRenderTarget> rt_;
     bool trackingMouse_ = false;
     bool followUp_ = false;
+    // Ritmo máximo de pintura: o rato gera centenas de WM_MOUSEMOVE por segundo e cada pintura
+    // ocupa o thread que também desenha o wallpaper. Pinturas pedidas cedo demais esperam.
+    LONGLONG lastPaintQpc_ = 0;
+    bool paintDeferred_ = false;
+    int captionPressed_ = 0;
+    bool closingByUser_ = false; // o WM_CLOSE atual veio do X / Alt+F4 (e não de fora) // HTMINBUTTON/HTMAXBUTTON/HTCLOSE premido (à espera de largar)
 };
 
 } // namespace ap::ui

@@ -59,25 +59,61 @@ IDWriteTextFormat* Gfx::format(const TextStyle& s) {
     return f.Get();
 }
 
-IWICBitmapSource* Gfx::image(const std::filesystem::path& path) {
+Gfx::DecodedImage Gfx::decodeFile(std::filesystem::path path) {
+    // Thread de trabalho: COM próprio e fábrica WIC própria; só os píxeis voltam ao thread de UI.
+    DecodedImage out;
+    const HRESULT init = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    {
+        ComPtr<IWICImagingFactory> wic;
+        ComPtr<IWICBitmapDecoder> decoder;
+        ComPtr<IWICBitmapFrameDecode> frame;
+        ComPtr<IWICFormatConverter> converter;
+        HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic));
+        if (SUCCEEDED(hr)) {
+            hr = wic->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand,
+                                                &decoder);
+        }
+        if (SUCCEEDED(hr)) hr = decoder->GetFrame(0, &frame);
+        if (SUCCEEDED(hr)) hr = wic->CreateFormatConverter(&converter);
+        if (SUCCEEDED(hr)) {
+            hr = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr,
+                                       0.0, WICBitmapPaletteTypeCustom);
+        }
+        UINT w = 0, h = 0;
+        if (SUCCEEDED(hr)) hr = converter->GetSize(&w, &h);
+        if (SUCCEEDED(hr) && w > 0 && h > 0 && w <= 8192 && h <= 8192) {
+            std::vector<uint8_t> pixels(static_cast<size_t>(w) * h * 4);
+            if (SUCCEEDED(converter->CopyPixels(nullptr, w * 4, static_cast<UINT>(pixels.size()), pixels.data()))) {
+                out.width = w;
+                out.height = h;
+                out.pixels = std::move(pixels);
+            }
+        }
+    }
+    if (SUCCEEDED(init)) CoUninitialize();
+    return out;
+}
+
+IWICBitmapSource* Gfx::image(const std::filesystem::path& path, bool wait) {
     const std::wstring key = path.wstring();
     if (auto it = images_.find(key); it != images_.end()) return it->second.Get();
-    ComPtr<IWICBitmapDecoder> decoder;
-    ComPtr<IWICBitmapFrameDecode> frame;
-    ComPtr<IWICFormatConverter> converter;
-    HRESULT hr = wic_->CreateDecoderFromFilename(key.c_str(), nullptr, GENERIC_READ,
-                                                 WICDecodeMetadataCacheOnDemand, &decoder);
-    if (SUCCEEDED(hr)) hr = decoder->GetFrame(0, &frame);
-    if (SUCCEEDED(hr)) hr = wic_->CreateFormatConverter(&converter);
-    if (SUCCEEDED(hr)) {
-        hr = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr,
-                                   0.0, WICBitmapPaletteTypeCustom);
+    auto pending = pending_.find(key);
+    if (pending == pending_.end()) {
+        // Ler um PNG do disco e descodificá-lo chegava a 400 ms na primeira pintura do launcher,
+        // no thread que também desenha o wallpaper. Agora vai para segundo plano.
+        pending = pending_.emplace(key, std::async(std::launch::async, &Gfx::decodeFile, path)).first;
     }
+    if (!wait && pending->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return nullptr;
+    DecodedImage img = pending->second.get();
+    pending_.erase(pending);
     // Guardar em memória (descodificar uma vez) e lembrar também as que falham.
     ComPtr<IWICBitmap> bitmap;
-    if (SUCCEEDED(hr)) hr = wic_->CreateBitmapFromSource(converter.Get(), WICBitmapCacheOnLoad, &bitmap);
-    images_[key] = SUCCEEDED(hr) ? ComPtr<IWICBitmapSource>(bitmap) : nullptr;
-    return images_[key].Get();
+    if (img.width > 0) {
+        wic_->CreateBitmapFromMemory(img.width, img.height, GUID_WICPixelFormat32bppPBGRA, img.width * 4,
+                                     static_cast<UINT>(img.pixels.size()), img.pixels.data(), &bitmap);
+    }
+    images_[key] = bitmap;
+    return bitmap.Get();
 }
 
 } // namespace ap::ui

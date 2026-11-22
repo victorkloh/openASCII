@@ -2,6 +2,37 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-PT/).
 
+## [0.5.0] — 2026-11-22
+
+### Adicionado
+- **15 tech demos**, um wallpaper por capacidade do motor, comentados para servirem de exemplo: `photo`, `spectrum`, `snow`, `temple`, `sandbox`, `fluid`, `coral`, `life`, `fractal`, `hud`, `planet`, `bonsai`, `mirror`, `terminal`, `arcade`. Temas novos: `synthwave/beat`, `valley/weather`, `matrix/code`.
+- **Entradas (`[inputs]`)**, só ativas nos wallpapers que as pedem: janelas e ícones como obstáculos, áudio do sistema (loopback, 64 bandas + batida), imagem/GIF/vídeo/webcam como textura (WIC + Media Foundation), CPU/RAM, tempo real (Open-Meteo, só com cidade definida) e texto (`file:`, `folder:`, `lines:`). Os temas também as podem ligar.
+- **Pós-processamento (`[post]`)**: glow pela "tinta" de cada glifo, scanlines, curvatura CRT, vinheta, aberração cromática e grão; caminho rápido sem custo quando desligado.
+- **Multi-pass**: `render.substeps` (1–64) com `passIndex`/`passCount` no shader.
+- Prelude: `asciiGlyph()` (qualquer caractere Latin-1), texto, áudio, imagem (`sampleSource`, `fitSource`, `sourceEdge`), obstáculos, fonte grande 5x7 (`bigFontPixel`), SDF 3D (`sdSphere`, `sdBox`, `sdTorus`, `cameraRay`...), `justClicked()`.
+- **Launcher**: secção "entradas" por wallpaper (o que usa, "Escolher imagem ou vídeo", "Incluir na playlist"); Definições com cidade do tempo real, autorização da webcam e playlist (de N em N minutos, ordem aleatória).
+- **Webcam com autorização explícita** (pergunta antes de ligar; "lembrar" opcional).
+- `--screenshot-delay <s>`; o `--bench` já não pergunta pelo Wallpaper Engine.
+
+### Alterado
+- **60 FPS por defeito** (antes: automático, a maioria a 30). As simulações que avançam por frame (fogo, ondas, neve, coral, vida, sandbox) usam `fixedStep()` e correm à mesma velocidade a qualquer FPS; configs antigas com `fps = 0` passam a 60.
+- **Aplicar sem cliques perdidos**: um pedido feito enquanto outro wallpaper compila fica em fila (antes perdia-se e era preciso clicar outra vez); o botão e o cartão do menu mostram "A preparar" enquanto compila; o código compilado fica em cache (`%LOCALAPPDATA%\AsciiPaper\shadercache`): o sandbox passou de 5,2 s para 21 ms na segunda vez.
+- **Efeitos de ecrã em qualquer wallpaper** (launcher): Nenhum, CRT, Néon, Cinema ou à medida (brilho, linhas, curvatura, vinheta, aberração, grão).
+- **Pesquisa e grupos no launcher**: procurar por nome, tipo ou descrição; lista agrupada por `meta.category` (Paisagens, Ambiente, Retro, 3D e espaço, Simulações, Dados e média, Jogos; os teus primeiro).
+- Webcam e cidade do tempo real configuram-se na própria página do wallpaper que as usa.
+- Caracteres: os wallpapers que desenham com caracteres próprios dizem-no (os conjuntos não se aplicavam e pareciam não funcionar); os conjuntos que não cabiam numa linha já não ficam escondidos.
+- `fractal` sem interação com o rato (o modo Julia confundia).
+- **Menu da bandeja mais compacto**: com 28 wallpapers saía do ecrã (2011 DIP de altura). Agora a grelha tem 3 colunas e scroll (no máximo ~3,5 linhas, com sombra nas bordas), a altura adapta-se sempre à área de trabalho, abre com o wallpaper em uso à vista, os ajustes rápidos ficam recolhidos, a pausa é um ícone no cabeçalho e há navegação por teclado (setas, Enter, Esc). Altura típica: ~490 DIP.
+
+### Corrigido
+- **Quebra de FPS com o rato sobre o launcher e ao trocar de wallpaper**: o ciclo de mensagens ficava preso a alternar entre movimento do rato e pintura e nunca atendia o timer dos frames; o fundo passa a desenhar à hora certa entre mensagens.
+- O fundo congelava enquanto se arrastava ou redimensionava o launcher, num menu ou num diálogo (medido: até 1,3 s); durante loops modais, um thread do threadpool espera pelo timer de alta resolução e o fundo continua a 30/60 fps.
+- Os botões minimizar/maximizar/fechar já não congelam o fundo (~100 ms por clique).
+- Interface mais leve: pinturas limitadas a ~70/s e de ~8 ms para ~2,7 ms (comparação de caminhos sem ir ao disco, larguras de texto em cache, registo lido só ao arrancar); previews descodificadas em segundo plano (primeira pintura de ~400 ms para ~40 ms); trocar de wallpaper não atualiza janelas escondidas.
+- `taskkill` (sem `/f`) já não fica preso no diálogo de saída, e fecha a app mesmo com o launcher aberto (antes só o escondia).
+- Neve: mexer o rato fazia os flocos todos "acelerarem" (o vento multiplicava o tempo); agora a deriva é o integral do vento e o rato só afasta os flocos à sua volta. Baixar a altura máxima apara logo as pilhas e a intensidade nota-se no ar.
+- Escolher outra imagem/vídeo (ou outro texto) num ajuste já reconfigura as entradas ao vivo.
+- `--screenshot` sai com erro se o wallpaper não carregar (em vez de ficar à espera).
 ## [0.4.0] — 2026-11-20
 
 ### Adicionado

@@ -3,6 +3,7 @@ name = "Aquarium"
 author = "AsciiPaper"
 version = "1.0.0"
 description = "Um aquário ASCII: peixes, bolhas, algas e areia. Os peixes fogem do rato; clicar deixa cair comida."
+category = "Ambiente"
 
 [render]
 mode = "shader"

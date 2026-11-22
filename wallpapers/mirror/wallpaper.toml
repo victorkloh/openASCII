@@ -1,0 +1,30 @@
+[meta]
+name = "Mirror"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Tu em ASCII, ao vivo pela webcam (só liga se aceitares). Mexe-te e saltam faíscas. Tech demo de webcam e deteção de movimento."
+category = "Dados e média"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 9
+scale = 10
+font = "Cascadia Mono"
+charset = " .:-=+*#%@"
+glyphs = "-/|\\*"
+
+[inputs]
+source = "webcam"   # pede autorização na primeira vez; nada é gravado nem enviado
+
+[colors]
+background = "#030404"
+palette = ["#030404", "#0e1a1f", "#1f6b7a", "#3fe0d0", "#b8fff4", "#ffffff"]
+
+[params]
+style    = { default = 0.0, min = 0.0, max = 2.0 } # 0 cores · 1 fósforo verde · 2 contornos neon
+contrast = { default = 1.3, min = 0.5, max = 3.0 }
+
+[post]
+glow = 0.3

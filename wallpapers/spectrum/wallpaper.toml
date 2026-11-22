@@ -1,0 +1,30 @@
+[meta]
+name = "Spectrum"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "O som que está a tocar, em ASCII: anel de frequências, barras com picos e ondas de choque na batida. Tech demo de [inputs] audio."
+category = "Dados e média"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 60
+cell = 11
+scale = 10
+font = "Cascadia Mono"
+charset = " .:-=+*#%@"
+glyphs = "▁▂▃▄▅▆▇█▀·*-/|\\"   # blocos de 1/8 (barras com precisão sub-célula), pico, estrelas, traços
+
+[inputs]
+audio = true   # a saída de som do PC (loopback), nunca o microfone
+
+[colors]
+background = "#05030c"
+palette = ["#05030c", "#2b0f54", "#6a1fb0", "#d0368a", "#ff7a4a", "#ffd36b", "#fff7e0"]
+
+[params]
+gain   = { default = 1.0,  min = 0.2, max = 3.0 }  # sensibilidade ao som
+size   = { default = 1.0,  min = 0.4, max = 2.0 }  # tamanho do anel
+bars   = { default = 64.0, min = 8.0, max = 160.0 } # barras por monitor
+height = { default = 0.32, min = 0.05, max = 0.8 }  # altura máxima das barras (fração do ecrã)
+idle   = { default = 1.0,  min = 0.0, max = 1.0 }  # animação quando não há som

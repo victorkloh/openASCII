@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace ap::app {
 
@@ -15,10 +16,17 @@ struct Config {
     bool pauseOnMaximized = true;
     bool pauseOnBatterySaver = true;
     bool spanMonitors = true; // um só efeito estendido por todos os monitores
-    int fps = 0;              // FPS do fundo: 0 = automático (o que cada wallpaper pede)
+    int fps = 60;             // FPS do fundo: 0 = automático (o que cada wallpaper pede); por defeito 60
     // Outras apps de wallpaper (Wallpaper Engine, Lively):
     std::string otherAppsOnStart = "ask"; // "ask" | "pause" | "ignore"
     std::string otherAppsOnExit = "ask";  // "ask" | "resume" | "keep"
+    // Entradas dos wallpapers:
+    std::string weatherCity;    // tempo real (Open-Meteo); vazio = nunca contacta a internet
+    bool webcamAllowed = false; // o utilizador autorizou os wallpapers que usam a webcam
+    // Playlist: trocar de wallpaper sozinho.
+    std::vector<std::string> playlist; // nomes (ou caminhos) pela ordem
+    int playlistMinutes = 0;           // 0 = desligada
+    bool playlistShuffle = false;
 
     static std::filesystem::path path();
     static Config load(); // ficheiro em falta ou inválido = valores por defeito (e um aviso no log)

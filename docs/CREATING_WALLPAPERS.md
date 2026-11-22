@@ -134,17 +134,98 @@ Por defeito o wallpaper só reage quando o rato está **sobre o desktop** (não 
 | `cellDistance(a, b)` | distância em alturas de célula, corrigida para ficar redonda no ecrã |
 | `noise(p)`, `fbm(p)` | ruído suave em [0,1], 2D ou 3D; `fbm` soma 5 oitavas |
 | `hash11`, `hash21`, `hash22`, `hash33` | pseudo-aleatório em [0,1) |
+| `asciiGlyph(c)` | para `o.glyph`: **qualquer** caractere Latin-1 (acentos incluídos), mesmo fora do charset: rótulos, números, texto |
+| `bigFontPixel(ch, x, y)` | fonte grande 5x7 "em píxeis" (letras, dígitos, pontuação) para relógios e títulos gigantes |
+| `sdSphere`, `sdBox`, `sdTorus`, `sdCylinder`, `sdPlane`, `opUnion`, `opSmoothUnion`, `opRepeat`, `rotateX/Y/Z`, `cameraRay` | 3D por raymarching (ver `temple`) |
+| `justClicked()` | verdadeiro uma única vez por clique (no frame do clique) |
+| `fixedStep(hz)` | simulações que avançam um passo por frame: só avançam `hz` vezes por segundo, para correrem igual a 30, 60 ou 144 fps (nos outros frames, copia o estado) |
 
 ### Efeitos com memória
 `o.state` + `prev()` permitem simulações: ondas que se propagam, rastos, autómatos celulares. O `ripple` incluído é uma equação de onda completa em ~40 linhas; vale a pena lê-lo.
 
-## 3. Charsets e glifos especiais
+## 3. Entradas: o mundo lá fora (`[inputs]`)
+
+Um wallpaper pode pedir dados do PC. **Só se lê/captura o que é pedido**: um wallpaper sem `[inputs]` não custa nada.
+
+```toml
+[inputs]
+windows = true        # janelas abertas como obstáculos (em células, de cima para baixo)
+icons = true          # ícones do ambiente de trabalho como obstáculos
+audio = true          # o som que está a tocar (saída do PC, nunca o microfone)
+system = true         # CPU e RAM
+weather = true        # tempo real da cidade escrita nas Definições (sem cidade: nada sai do PC)
+source = "foto.jpg"   # imagem, GIF animado, vídeo (.mp4 .mov .wmv...), "wallpaper" ou "webcam"
+text = "lines:frases.txt"
+text_interval = 20    # "lines:": segundos por linha
+```
+
+| No shader | O que é |
+|---|---|
+| `obstacleCount()`, `windowCount()`, `obstacleRect(k)` | retângulos (células: x0, y0, x1, y1); os primeiros `windowCount()` são janelas, o resto ícones |
+| `obstacleAt(c)`, `insideWindow(c)`, `surfaceBelow(c)` | a célula está tapada? qual é o topo da janela mais próxima por baixo? |
+| `audioBand(i)` (0..63), `audioSpectrum(t)`, `audioLevels` | espectro de 64 bandas (graves no 0) e graves/médios/agudos/batida |
+| `systemStats.x`, `.y` | CPU e RAM, 0..1 |
+| `weather` / `weather2` | chuva (mm/h), nuvens (0..1), vento (m/s), temperatura (°C) / é de dia, elevação do sol, válido, código WMO |
+| `hasSource()`, `sampleSource(uv)`, `fitSource(p, min, size, cover)`, `sourceEdge(uv, cellUv)` | a imagem/vídeo: amostrar, encaixar num retângulo, contornos (Sobel) |
+| `textLength`, `textChar(i)`, `textGlyph(i)`, `textAge()`, `textLineIndex()` | o texto (Latin-1) e, no modo `lines:`, há quanto tempo a linha atual apareceu |
+
+- `source`: caminho relativo à pasta do wallpaper ou absoluto, com `%VARIAVEIS%`. `"wallpaper"` = o wallpaper do Windows que o AsciiPaper substituiu. `"webcam"` pede autorização na primeira vez. No launcher, "Escolher imagem ou vídeo" troca a imagem sem mexer no código.
+- `text`: texto literal, `file:<ficheiro>`, `folder:<pasta>` (o código de uma pasta, até 64 K caracteres) ou `lines:<ficheiro>` (uma linha de cada vez; `#` = comentário).
+- Um **tema** também pode ligar entradas (secção `[inputs]` no tema): `synthwave/beat` liga o áudio, `valley/weather` o tempo real, `matrix/code` o texto.
+
+## 4. Pós-processamento (`[post]`)
+
+Efeitos aplicados ao desenhar as células em píxeis, 0..1 cada, em **qualquer** wallpaper (e em temas):
+
+```toml
+[post]
+glow = 0.6        # halo à volta dos caracteres claros (cada glifo brilha conforme a sua "tinta")
+scanlines = 0.5   # linhas de monitor CRT
+curvature = 0.4   # vidro abaulado
+vignette = 0.5    # cantos mais escuros
+aberration = 0.3  # vermelho e azul desalinhados
+grain = 0.2       # grão de filme
+```
+
+Sem `[post]`, o render usa o caminho rápido de sempre (zero custo). O utilizador pode ligar, desligar ou afinar estes efeitos em qualquer wallpaper no launcher ("efeitos de ecrã": Nenhum, CRT, Néon, Cinema ou à medida).
+
+**Charset ou caracteres próprios?** Se o teu wallpaper desenha só com `o.glyph` (sprites, `asciiGlyph`), põe `charset = " "`: o launcher mostra que os conjuntos de caracteres não se aplicam, em vez de oferecer opções que não mudam nada.
+
+## 5. Técnicas avançadas
+
+- **Vários passos por frame**: `render.substeps = N` corre o shader N vezes por frame; `passIndex` (0..N-1) diz qual é o passo e `prev()` vê o passo anterior. Serve para simulações rápidas (`sandbox`: 4 passos) e para encadear fases de um algoritmo (`fluid`: advecção, 22 iterações de pressão, projeção).
+- **Estado global numa célula reservada**: escolhe uma célula sempre visível (ex.: `primaryRect().xy`) para guardar valores do "jogo inteiro" no `state` dela; todas as outras leem-na com `prev()`. O `arcade` guarda assim a bola e os pontos; o `spectrum` o instante da última batida; o `bonsai` usa duas linhas inteiras para os 63 ramos da árvore.
+- **Movimentos sem conflitos** (areia, neve): origem e destino avaliam a mesma condição sobre o estado anterior e cada um escreve a sua metade da troca; o sentido diagonal alterna entre passos.
+- **Ler a vizinhança uma vez**: em regras que se chamam umas às outras, copia a vizinhança para arrays locais (ver `sandbox`). Chamar `prev()` em funções encadeadas pode fazer o compilador demorar minutos.
+- **Glifos brutos**: `o.glyph = asciiGlyph(c)` (valores negativos) desenha qualquer caractere do atlas; `o.glyph > 0` usa `glyph(k)`; `0` usa a rampa do charset.
+
+## 6. As demos: o que cada uma ensina
+
+| Wallpaper | Mostra |
+|---|---|
+| `photo` | `[inputs] source` (imagem/GIF/vídeo), rampa de luminância, contornos de Sobel com traços direcionais, lupa no rato |
+| `spectrum` | `[inputs] audio`, blocos de 1/8 (precisão sub-célula), picos com estado por coluna, estado global da batida |
+| `snow` | `[inputs] windows` e `icons`, autómato de neve que assenta e cai quando a janela se mexe |
+| `temple` | 3D por raymarching: SDF, repetição polar, sombras suaves, oclusão ambiente, nevoeiro, câmara com o rato |
+| `sandbox` | autómato celular com `substeps`, trocas sem conflitos, água com momento, rato que pinta materiais |
+| `fluid` | multi-pass: fluido incompressível (stable fluids), MacCormack, confinamento de vorticidade |
+| `coral` | equações de reação-difusão (Gray-Scott) com 24 passos por frame |
+| `life` | Jogo da Vida com idade, rastos e "meteoros"; planadores ao clicar |
+| `fractal` | Mandelbrot com zoom contínuo e coloração suave (matemática pesada por célula) |
+| `hud` | `[inputs] system` e `weather`, texto com `asciiGlyph`, números com `bigFontPixel`, gráficos com histórico, `[post]` |
+| `planet` | esfera e texturas procedurais 3D, Sol com a declinação de hoje, luzes noturnas |
+| `bonsai` | estado global em células reservadas (63 ramos), crescimento lento, estações do ano reais |
+| `mirror` | webcam com autorização, deteção de movimento por diferença entre frames |
+| `terminal` | `[inputs] text` em `lines:`, quebra de linha por palavras no shader, CRT completo com `[post]` |
+| `arcade` | um jogo inteiro (Breakout) com estado global; joga sozinho ou com o rato |
+
+## 7. Charsets e glifos especiais
 
 - Qualquer caractere Unicode que a fonte tenha. Os que a fonte não tem aparecem como `?` (o log avisa).
 - **Blocos** `░▒▓█▀▄▌▐▖▗▘▝…` e **linhas de caixa** `─│┌┐└┘├┤┬┴┼━┃…` são desenhados pela app, píxel a píxel, para encaixarem **sem costuras** entre células.
 - **Braille** `⠀`–`⣿` também é desenhado pela app: ótimo para modos de "alta resolução".
 
-## 4. Temas (sem código)
+## 8. Temas (sem código)
 
 Um tema herda de um wallpaper e só muda valores. Põe-no em `themes/` dentro da pasta do wallpaper e aparece na tray como `wallpaper / tema`.
 
@@ -162,11 +243,12 @@ speed = 2.0
 
 Valores fora de `[min, max]` são limitados (com um aviso no log).
 
-## 5. Referência do `wallpaper.toml`
+## 9. Referência do `wallpaper.toml`
 
 | Chave | Tipo | Por defeito |
 |---|---|---|
 | `meta.name/author/version/description` | texto | |
+| `meta.category` | grupo no launcher: `Paisagens`, `Ambiente`, `Retro`, `3D e espaço`, `Simulações`, `Dados e média`, `Jogos` (outro = "Outros") | vazio |
 | `render.mode` | `"shader"` \| `"script"` | `"shader"` |
 | `render.entry` | ficheiro na pasta | `main.hlsl` |
 | `render.fps` | 1–240 (limitado pelo `max_fps` global) | 30 |
@@ -179,3 +261,8 @@ Valores fora de `[min, max]` são limitados (com um aviso no log).
 | `colors.background` | `"#rgb"`, `"#rrggbb"`, `"#rrggbbaa"` | `#05070d` |
 | `colors.palette` | 1–8 cores | `[background, #e0f2fe]` |
 | `params.<nome>` | `{ default, min, max }` (máx. 16) | |
+| `render.substeps` | 1–64 passos por frame | 1 |
+| `inputs.windows/icons/audio/system/weather` | `true`/`false` | `false` |
+| `inputs.source` | caminho, `"wallpaper"` ou `"webcam"` | vazio |
+| `inputs.text` / `inputs.text_interval` | ver secção 3 / 1–3600 s | vazio / 15 |
+| `post.glow/scanlines/curvature/vignette/aberration/grain` | 0–1 | 0 |

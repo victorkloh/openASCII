@@ -1,0 +1,36 @@
+[meta]
+name = "Terminal"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Um monitor de fósforo antigo a escrever citações, letra a letra. Tech demo de [inputs] text e do pós-processamento CRT ([post])."
+category = "Retro"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 15
+scale = 10
+font = "Cascadia Mono"
+charset = " "
+glyphs = "█"   # o cursor
+
+[inputs]
+text = "lines:quotes.txt"   # uma linha de cada vez; edita o ficheiro à vontade
+text_interval = 20          # segundos por citação
+
+[colors]
+background = "#020804"
+palette = ["#020804", "#06210f", "#0d4a22", "#1f8f45", "#39ff7a", "#b6ffcf"]
+
+# O look de monitor antigo: tudo isto funciona em qualquer wallpaper.
+[post]
+glow = 0.7
+scanlines = 0.55
+curvature = 0.45
+vignette = 0.6
+aberration = 0.3
+grain = 0.25
+
+[params]
+speed = { default = 1.0, min = 0.2, max = 5.0 }  # velocidade a escrever

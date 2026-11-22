@@ -7,6 +7,9 @@
 #include "version.h"
 #include "wallpaper/Wallpaper.h"
 
+#include <shobjidl.h>
+#include <wrl/client.h>
+
 #include <algorithm>
 #include <cmath>
 #include <format>
@@ -50,10 +53,7 @@ std::wstring toWide32(const std::u32string& s) {
     for (char32_t c : s) out += c <= 0xFFFF ? static_cast<wchar_t>(c) : L'?';
     return out;
 }
-bool same(const fs::path& a, const fs::path& b) {
-    std::error_code ec;
-    return !a.empty() && !b.empty() && fs::equivalent(a, b, ec);
-}
+bool same(const fs::path& a, const fs::path& b) { return samePath(a, b); }
 
 // Rampas de caracteres prontas a usar.
 struct CharsetPreset {
@@ -78,6 +78,9 @@ void Launcher::show() {
     refresh();
     ShowWindow(hwnd_, IsIconic(hwnd_) ? SW_RESTORE : SW_SHOWNORMAL);
     SetForegroundWindow(hwnd_);
+    RECT r{};
+    GetWindowRect(hwnd_, &r);
+    log::debug(L"Launcher aberto em ({}, {}) - ({}, {})", r.left, r.top, r.right, r.bottom);
     invalidate();
 }
 
@@ -140,20 +143,55 @@ void Launcher::selectVariant(const fs::path& path) {
     }
 }
 
-HRESULT Launcher::renderToPng(const std::wstring& path, int page) {
+HRESULT Launcher::renderToPng(const std::wstring& path, int page, int heightDip) {
     page_ = static_cast<Page>(std::clamp(page, 0, 2));
     if (page_ == Page::Settings) contentHeight_ = 0; // desenhar do topo
     refresh();
     if (page_ == Page::New) newName_ = L"Aurora";
-    return renderToPngImpl(path, 1080, 720, 1.5f);
+    return renderToPngImpl(path, 1080, static_cast<float>(heightDip), heightDip > 720 ? 1.0f : 1.5f);
 }
 
+namespace {
+// Diálogo do Windows para escolher uma imagem, GIF ou vídeo.
+bool pickMediaFile(HWND owner, std::wstring& out) {
+    Microsoft::WRL::ComPtr<IFileOpenDialog> dlg;
+    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dlg)))) return false;
+    const COMDLG_FILTERSPEC types[] = {
+        {L"Imagens, GIFs e vídeos", L"*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff;*.mp4;*.mov;*.m4v;*.wmv;*.avi;*.mkv;*.webm"},
+        {L"Todos os ficheiros", L"*.*"},
+    };
+    dlg->SetFileTypes(static_cast<UINT>(std::size(types)), types);
+    dlg->SetTitle(L"Escolher imagem, GIF ou vídeo");
+    if (FAILED(dlg->Show(owner))) return false; // cancelado
+    Microsoft::WRL::ComPtr<IShellItem> item;
+    PWSTR path = nullptr;
+    if (FAILED(dlg->GetResult(&item)) || FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) return false;
+    out = path;
+    CoTaskMemFree(path);
+    return true;
+}
+} // namespace
+
 bool Launcher::handleMessage(UINT msg, WPARAM, LPARAM lp, LRESULT& result) {
+    if (msg == kMsgPickSource) {
+        std::wstring path;
+        app_.setModalLoop(true); // o diálogo tem o seu próprio loop: o fundo continua a desenhar
+        const bool ok = pickMediaFile(hwnd_, path);
+        app_.setModalLoop(false);
+        if (ok && editor_.valid) {
+            editor_.draft.source = win::toUtf8(path);
+            editor_.apply(app_, true);
+        }
+        invalidate();
+        result = 0;
+        return true;
+    }
     if (msg == WM_CLOSE) {
-        // O utilizador fechou a janela: só esconder (a app continua na bandeja). Um WM_CLOSE
-        // numa janela já escondida vem de fora (ex.: "taskkill" sem /f): sair com limpeza.
-        if (IsWindowVisible(hwnd_)) ShowWindow(hwnd_, SW_HIDE);
-        else app_.quit();
+        // O utilizador fechou a janela (X, Alt+F4): só esconder, a app continua na bandeja.
+        // Um WM_CLOSE direto vem de fora (ex.: "taskkill" sem /f de um instalador): sair com
+        // limpeza, mesmo com o launcher aberto (antes só o escondia e a app ficava a correr).
+        if (closingByUser() && IsWindowVisible(hwnd_)) ShowWindow(hwnd_, SW_HIDE);
+        else app_.quitImmediately();
         result = 0;
         return true;
     }
@@ -215,21 +253,66 @@ void Launcher::buildSidebar(Ui& ui, float h) {
     ver.align = DWRITE_TEXT_ALIGNMENT_TRAILING;
     ui.text(rect(x, y, w, 30), L"v" ASCIIPAPER_VERSION_WSTR, t.faint, ver);
     y += 58;
-    ui.text(rect(x, y, w, 18), L"// wallpapers", t.faint, eyebrow());
-    y += 26;
+    // Pesquisa: pelo nome, título, categoria ou descrição (sem distinguir maiúsculas).
+    ui.textField(makeId(L"search"), rect(x, y, w, 32), search_, L"Procurar wallpapers");
+    y += 44;
+
+    auto lower = [](std::wstring s) {
+        if (!s.empty()) CharLowerBuffW(s.data(), static_cast<DWORD>(s.size()));
+        return s;
+    };
+    const std::wstring query = lower(search_);
+    // Grupos por tipo, numa ordem fixa; os teus wallpapers primeiro.
+    static constexpr const wchar_t* kGroups[] = {L"Os teus", L"Paisagens", L"Ambiente", L"Retro", L"3D e espaço",
+                                                 L"Simulações", L"Dados e média", L"Jogos", L"Outros"};
+    auto groupOf = [&](const WallpaperInfo& it) -> size_t {
+        if (it.userOwned) return 0;
+        for (size_t g = 1; g + 1 < std::size(kGroups); ++g)
+            if (it.category == kGroups[g]) return g;
+        return std::size(kGroups) - 1;
+    };
+    struct Row {
+        size_t item;  // índice em items_ (ou SIZE_MAX = cabeçalho)
+        size_t group;
+    };
+    std::vector<Row> rows;
+    for (size_t g = 0; g < std::size(kGroups); ++g) {
+        bool header = false;
+        for (size_t i = 0; i < items_.size(); ++i) {
+            const auto& it = items_[i];
+            if (!it.theme.empty() || groupOf(it) != g) continue;
+            if (!query.empty()) {
+                const std::wstring hay = lower(it.base + L" " + it.title + L" " + it.category + L" " + it.description);
+                if (hay.find(query) == std::wstring::npos) continue;
+            }
+            if (!header) rows.push_back({SIZE_MAX, g});
+            header = true;
+            rows.push_back({i, g});
+        }
+    }
 
     const std::wstring active = activeBase();
     const float listBottom = h - 112;
     const R listArea{0, y, kSidebar, listBottom};
-    int bases = 0;
-    for (const auto& it : items_) bases += it.theme.empty() ? 1 : 0;
-    const float rowH = 60;
-    const float off = ui.scrollArea(makeId(L"side-scroll"), listArea, bases * rowH);
+    const float rowH = 60, headerH = 30;
+    float contentH = 0;
+    for (const Row& r : rows) contentH += r.item == SIZE_MAX ? headerH : rowH;
+    const float off = ui.scrollArea(makeId(L"side-scroll"), listArea, contentH);
     ui.pushClip(listArea);
     float ry = y - off;
-    for (size_t i = 0; i < items_.size(); ++i) {
+    if (rows.empty()) ui.text(rect(x, y + 6, w, 20), L"Nada encontrado.", t.faint, smallText(12.5f));
+    for (const Row& r : rows) {
+        if (r.item == SIZE_MAX) {
+            ui.text(rect(x, ry + 8, w, 18), L"// " + lower(kGroups[r.group]), t.faint, eyebrow());
+            ry += headerH;
+            continue;
+        }
+        const size_t i = r.item;
         const auto& it = items_[i];
-        if (!it.theme.empty()) continue;
+        if (ry > listBottom || ry + rowH < y) { // fora da vista
+            ry += rowH;
+            continue;
+        }
         const R row = rect(8, ry, kSidebar - 16, rowH - 4);
         const bool sel = page_ == Page::Wallpaper && it.base == selectedBase_;
         const bool over = ui.hovered(row) && ui.hovered(listArea);
@@ -294,15 +377,22 @@ float Launcher::buildWallpaperPage(Ui& ui, float x, float y, float w) {
     ui.text(rect(tx, y + 2, tw, 30), widen(m.name.empty() ? "Sem nome" : m.name), t.text, heading(22));
     std::wstring meta = m.author.empty() ? L"" : L"por " + widen(m.author);
     if (!m.version.empty()) meta += (meta.empty() ? L"v" : L" · v") + widen(m.version);
+    if (!m.category.empty()) meta += (meta.empty() ? L"" : L" · ") + widen(m.category);
     ui.text(rect(tx, y + 36, tw, 18), meta, t.faint, mono(11.5f));
     TextStyle desc = smallText(13);
     desc.wrap = true;
     desc.valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
-    ui.text(rect(tx, y + 62, tw, 44), widen(m.description), t.muted, desc);
+    ui.text(rect(tx, y + 62, tw, std::max(44.0f, imgH - 34 - 62 - 12)), widen(m.description), t.muted, desc);
 
     const float by = y + imgH - 34;
+    const bool isLoading = same(app_.loadingPath(), editor_.path);
     if (isActive) {
         ui.button(makeId(L"applied"), rect(tx, by, 120, 34), L"Em uso", ButtonKind::Secondary, L'\xE73E', false);
+    } else if (isLoading) {
+        // A compilar o shader (pode levar uns segundos na primeira vez): o clique não se perdeu.
+        static constexpr wchar_t kSpin[] = L"|/-\\";
+        ui.button(makeId(L"loading"), rect(tx, by, 120, 34),
+                  std::wstring(L"A preparar ") + kSpin[(GetTickCount64() / 120) % 4], ButtonKind::Secondary, 0, false);
     } else if (ui.button(makeId(L"apply"), rect(tx, by, 120, 34), L"Aplicar", ButtonKind::Primary)) {
         app_.activate(editor_.path);
     }
@@ -368,6 +458,79 @@ float Launcher::buildWallpaperPage(Ui& ui, float x, float y, float w) {
     if (!message_.empty()) {
         ui.text(rect(x, y, w, 18), message_, t.muted, smallText());
         y += 22;
+    }
+
+    // ---- Entradas: o que o wallpaper usa, a imagem/vídeo e a playlist ----
+    {
+        std::wstring uses;
+        auto add = [&](bool on, const wchar_t* label) {
+            if (on) uses += (uses.empty() ? L"" : L" · ") + std::wstring(label);
+        };
+        add(m.useWindows, L"janelas");
+        add(m.useIcons, L"ícones");
+        add(m.useAudio, L"som do PC");
+        add(m.useSystem, L"CPU e RAM");
+        add(m.useWeather, L"tempo real");
+        add(!m.text.empty(), L"texto");
+        add(m.source == "webcam", L"webcam");
+        add(!m.source.empty() && m.source != "webcam", L"imagem/vídeo");
+        y = section(ui, x, y + 8, w, L"entradas",
+                    uses.empty() ? L"Este wallpaper não usa entradas externas." : L"Usa: " + uses);
+        if (!m.source.empty() && m.source != "webcam") {
+            const std::wstring current = m.source == "wallpaper" ? L"O wallpaper do Windows"
+                                                                  : fs::path(widen(m.source)).filename().wstring();
+            ui.text(rect(x, y, w, 18), L"Imagem: " + current, t.muted, smallText(12.5f));
+            y += 24;
+            if (ui.button(makeId(L"pick-source"), rect(x, y, 220, 34), L"Escolher imagem ou vídeo", ButtonKind::Secondary,
+                          L'\xE8B9')) {
+                PostMessageW(hwnd_, kMsgPickSource, 0, 0); // o diálogo abre fora da pintura
+            }
+            if (m.source != "wallpaper" &&
+                ui.button(makeId(L"source-windows"), rect(x + 228, y, 220, 34), L"Usar o wallpaper do Windows",
+                          ButtonKind::Ghost)) {
+                editor_.draft.source = "wallpaper";
+                changed = true;
+            }
+            y += 46;
+        }
+        // Webcam e cidade configuram-se aqui mesmo (também estão nas Definições).
+        if (m.source == "webcam" || m.useWeather) {
+            GlobalSettings gs = app_.settings();
+            bool settingsChanged = false;
+            if (m.source == "webcam") {
+                settingsChanged |= ui.toggle(makeId(L"wp-webcam"), rect(x - 12, y, std::min(w, 620.0f) + 12, 54),
+                                             L"Permitir a webcam",
+                                             L"A imagem nunca sai do PC. O Windows mostra quando a câmara está ligada.",
+                                             gs.webcamAllowed);
+                y += 60;
+            }
+            if (m.useWeather) {
+                if (!cityLoaded_) {
+                    cityEdit_ = gs.weatherCity;
+                    cityLoaded_ = true;
+                }
+                ui.text(rect(x, y, w, 18), L"Cidade para o tempo real (Open-Meteo; vazio = sem internet)", t.muted,
+                        smallText(12.5f));
+                y += 22;
+                const bool citySubmit = ui.textField(makeId(L"wp-city"), rect(x, y, 240, 32), cityEdit_, L"ex.: Lisboa");
+                if ((ui.button(makeId(L"wp-city-save"), rect(x + 248, y, 90, 32), L"Guardar", ButtonKind::Secondary) ||
+                     citySubmit) &&
+                    cityEdit_ != gs.weatherCity) {
+                    gs.weatherCity = cityEdit_;
+                    settingsChanged = true;
+                }
+                if (!gs.weatherCity.empty())
+                    ui.text(rect(x + 348, y, w - 348, 32), L"Em uso: " + gs.weatherCity, t.faint, smallText(12));
+                y += 44;
+            }
+            if (settingsChanged) app_.setSettings(gs);
+        }
+        bool listed = app_.inPlaylist(editor_.path);
+        if (ui.toggle(makeId(L"in-playlist"), rect(x - 12, y, std::min(w, 620.0f) + 12, 54), L"Incluir na playlist",
+                      L"A playlist (em Definições) vai trocando entre os wallpapers marcados.", listed)) {
+            app_.setInPlaylist(editor_.path, listed);
+        }
+        y += 58;
     }
 
     // ---- Grelha ----
@@ -446,26 +609,37 @@ float Launcher::buildWallpaperPage(Ui& ui, float x, float y, float w) {
     }
 
     // ---- Caracteres ----
-    y = section(ui, x, y + 10, w, L"caracteres", L"Do mais vazio ao mais cheio. Enter para aplicar.");
-    const bool charsetSubmit = ui.textField(makeId(L"charset"), rect(x, y, std::min(w, 360.0f), 32), charsetEdit_,
-                                            L" .:-=+*#%@");
-    float px = x + std::min(w, 360.0f) + 12;
-    for (size_t i = 0; i < std::size(kCharsets); ++i) {
-        const float cw = ui.textWidth(kCharsets[i].label, smallText(12.5f)) + 24;
-        if (px + cw > x + w) break;
-        if (ui.chip(makeId(L"cs", static_cast<int>(i)), rect(px, y + 2, cw, 28), kCharsets[i].label,
-                    m.charset == kCharsets[i].chars)) {
-            editor_.draft.charset = std::u32string(kCharsets[i].chars);
-            charsetEdit_ = toWide32(*editor_.draft.charset);
+    // Um charset de um só caractere quer dizer que o wallpaper desenha com os seus próprios
+    // caracteres (glyphs/sprites): aí os conjuntos não mudam nada e é melhor dizê-lo.
+    const bool usesRamp = editor_.base.charset.size() > 1;
+    y = section(ui, x, y + 10, w, L"caracteres",
+                usesRamp ? L"Do mais vazio ao mais cheio. Enter para aplicar."
+                         : L"Este wallpaper desenha com os seus próprios caracteres: os conjuntos não se aplicam.");
+    if (usesRamp) {
+        const bool charsetSubmit = ui.textField(makeId(L"charset"), rect(x, y, std::min(w, 360.0f), 32), charsetEdit_,
+                                                L" .:-=+*#%@");
+        y += 42;
+        float px = x;
+        for (size_t i = 0; i < std::size(kCharsets); ++i) {
+            const float cw = ui.textWidth(kCharsets[i].label, smallText(12.5f)) + 24;
+            if (px + cw > x + w) { // não cabe: próxima linha (antes ficavam escondidos)
+                px = x;
+                y += 36;
+            }
+            if (ui.chip(makeId(L"cs", static_cast<int>(i)), rect(px, y, cw, 28), kCharsets[i].label,
+                        m.charset == kCharsets[i].chars)) {
+                editor_.draft.charset = std::u32string(kCharsets[i].chars);
+                charsetEdit_ = toWide32(*editor_.draft.charset);
+                changed = true;
+            }
+            px += cw + 6;
+        }
+        if (charsetSubmit && !charsetEdit_.empty()) {
+            editor_.draft.charset = std::u32string(charsetEdit_.begin(), charsetEdit_.end());
             changed = true;
         }
-        px += cw + 6;
+        y += 40;
     }
-    if (charsetSubmit && !charsetEdit_.empty()) {
-        editor_.draft.charset = std::u32string(charsetEdit_.begin(), charsetEdit_.end());
-        changed = true;
-    }
-    y += 44;
 
     // ---- Parâmetros ----
     if (!m.params.empty()) {
@@ -483,6 +657,46 @@ float Launcher::buildWallpaperPage(Ui& ui, float x, float y, float w) {
                 changed = true;
             }
             if (i % 2 == 1 || i + 1 == m.params.size()) y += 54;
+        }
+    }
+
+    // ---- Efeitos de ecrã: em qualquer wallpaper (o terminal traz CRT, mas qualquer um o pode ter) ----
+    {
+        y = section(ui, x, y + 10, w, L"efeitos de ecrã",
+                    L"Aplicados ao desenhar os caracteres. Funcionam em qualquer wallpaper.");
+        struct FxPreset {
+            const wchar_t* label;
+            float v[6]; // brilho, linhas, curvatura, vinheta, aberração, grão
+        };
+        static constexpr FxPreset kFx[] = {
+            {L"Nenhum", {0, 0, 0, 0, 0, 0}},
+            {L"CRT", {0.6f, 0.5f, 0.4f, 0.55f, 0.3f, 0.2f}},
+            {L"Néon", {0.75f, 0, 0, 0.3f, 0, 0}},
+            {L"Cinema", {0.2f, 0, 0, 0.6f, 0.15f, 0.3f}},
+        };
+        float px = x;
+        for (int k = 0; k < static_cast<int>(std::size(kFx)); ++k) {
+            bool match = true;
+            for (size_t j = 0; j < 6; ++j) match = match && std::abs(postFxValue(m.post, j) - kFx[k].v[j]) < 0.02f;
+            const float cw = ui.textWidth(kFx[k].label, smallText(12.5f)) + 26;
+            if (ui.chip(makeId(L"fx-preset", k), rect(px, y, cw, 28), kFx[k].label, match) && !match) {
+                for (size_t j = 0; j < 6; ++j) editor_.draft.post[j] = kFx[k].v[j];
+                changed = true;
+            }
+            px += cw + 6;
+        }
+        y += 40;
+        static constexpr const wchar_t* kFxLabels[] = {L"Brilho", L"Linhas (CRT)", L"Curvatura",
+                                                       L"Vinheta", L"Aberração", L"Grão"};
+        for (size_t j = 0; j < 6; ++j) {
+            const float px2 = x + (j % 2) * (colW + 24);
+            float v = postFxValue(m.post, j);
+            if (ui.slider(makeId(L"fx", static_cast<int>(j)), rect(px2, y, colW, 40), kFxLabels[j], v, 0, 1, 0.01f,
+                          std::format(L"{:.0f}%", v * 100))) {
+                editor_.draft.post[j] = v;
+                changed = true;
+            }
+            if (j % 2 == 1) y += 54;
         }
     }
 
@@ -618,6 +832,43 @@ float Launcher::buildSettingsPage(Ui& ui, float x, float y, float w) {
     }
     if (ui.sliderReleased()) changed = true;
     y += 66;
+
+    y = section(ui, x, y, w, L"entradas dos wallpapers",
+                L"Só são usadas pelos wallpapers que as pedem; nada é gravado.");
+    ui.text(rect(x, y, rw, 20), L"Cidade para o tempo real", t.text, smallText(13));
+    ui.text(rect(x, y + 22, rw, 18),
+            L"Para o HUD e o tema \"weather\" (via Open-Meteo). Vazio = a app nunca vai à internet.",
+            t.faint, smallText(12));
+    y += 46;
+    if (!cityLoaded_) {
+        cityEdit_ = s.weatherCity;
+        cityLoaded_ = true;
+    }
+    const bool citySubmit = ui.textField(makeId(L"city"), rect(x, y, 260, 32), cityEdit_, L"ex.: Lisboa");
+    if ((ui.button(makeId(L"city-save"), rect(x + 268, y, 90, 32), L"Guardar", ButtonKind::Secondary) || citySubmit) &&
+        cityEdit_ != s.weatherCity) {
+        s.weatherCity = cityEdit_;
+        changed = true;
+    }
+    y += 46;
+    changed |= ui.toggle(makeId(L"webcam"), rect(x - 12, y, rw + 12, 54), L"Permitir a webcam",
+                         L"Para wallpapers como o Mirror. A imagem nunca sai do PC; o Windows mostra quando a câmara está ligada.",
+                         s.webcamAllowed);
+    y += 70;
+
+    y = section(ui, x, y, w, L"playlist",
+                std::format(L"{} wallpaper(s) marcados (no ecrã de cada wallpaper: \"Incluir na playlist\").",
+                            s.playlistCount));
+    float minutes = static_cast<float>(s.playlistMinutes);
+    if (ui.slider(makeId(L"playlist-min"), rect(x, y, rw, 40), L"Trocar de wallpaper a cada", minutes, 0, 240, 5,
+                  minutes < 1 ? std::wstring(L"desligada") : std::format(L"{} min", static_cast<int>(minutes)))) {
+        s.playlistMinutes = static_cast<int>(minutes);
+    }
+    if (ui.sliderReleased()) changed = true;
+    y += 54;
+    changed |= ui.toggle(makeId(L"playlist-shuffle"), rect(x - 12, y, rw + 12, 54), L"Ordem aleatória",
+                         L"Sem repetir o mesmo duas vezes seguidas.", s.playlistShuffle);
+    y += 70;
 
     y = section(ui, x, y, w, L"sistema");
     changed |= ui.toggle(makeId(L"autostart"), rect(x - 12, y, rw + 12, 54), L"Iniciar com o Windows",

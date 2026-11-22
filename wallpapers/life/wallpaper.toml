@@ -1,0 +1,22 @@
+[meta]
+name = "Life"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "O Jogo da Vida de Conway, com cor pela idade e rastos. O rato desenha vida; clicar lança planadores. Tech demo de autómatos com estado."
+category = "Simulações"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 10
+scale = 10
+font = "Cascadia Mono"
+charset = " .,:;+*oO@"
+
+[colors]
+background = "#06040a"
+palette = ["#06040a", "#1c1033", "#3d1f73", "#2f7fd1", "#3fd1b8", "#c8ff8a", "#ffffff"]
+
+[params]
+rate = { default = 15.0, min = 1.0, max = 60.0 }  # gerações por segundo

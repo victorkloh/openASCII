@@ -58,13 +58,16 @@ CellOut cell(CellIn i)
     // Mostrar a inclinação da água (como reflexos de luz) em vez da altura pura.
     float slope = abs(prev(c + int2(1, 0)).x - prev(c + int2(-1, 0)).x) +
                   abs(prev(c + int2(0, 1)).x - prev(c + int2(0, -1)).x);
-    float v = saturate((abs(h) * 0.5 + slope * 1.3) * param("contrast"));
+    // A 60 passos por segundo (a qualquer FPS): nos frames a mais só se redesenha o mesmo.
+    bool stepNow = fixedStep(60.0);
+    if (!stepNow) h = here.x;
+    float v = saturate((abs(stepNow ? h : here.x) * 0.5 + slope * 1.3) * param("contrast"));
 
     CellOut o;
     o.value = v;
     o.fg = palette(saturate(v * 1.1));
     o.bg = float4(0, 0, 0, 0); // transparente = cor de fundo
-    o.state = float4(h, here.x, 0, 0);
+    o.state = stepNow ? float4(h, here.x, 0, 0) : here;
     o.glyph = 0;
     return o;
 }

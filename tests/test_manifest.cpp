@@ -122,6 +122,75 @@ TEST_CASE("scale e glyphs") {
     CHECK_FALSE(parseManifest("[render]\nscale = 0\n").error.empty());
 }
 
+TEST_CASE("inputs e substeps") {
+    const auto r = parseManifest("[render]\nsubsteps = 8\n[inputs]\nwindows = true\naudio = true\n"
+                                 "source = \"foto.jpg\"\ntext = \"quotes\"\n");
+    REQUIRE(r.error.empty());
+    CHECK(r.manifest.substeps == 8);
+    CHECK(r.manifest.useWindows);
+    CHECK(r.manifest.useAudio);
+    CHECK_FALSE(r.manifest.useIcons);
+    CHECK(r.manifest.source == "foto.jpg");
+    CHECK(r.manifest.text == "quotes");
+    CHECK_FALSE(parseManifest("[render]\nsubsteps = 0\n").error.empty());
+    CHECK_FALSE(parseManifest("[render]\n[inputs]\naudio = \"sim\"\n").error.empty());
+    // Um tema pode trocar a imagem e o texto.
+    Theme t;
+    t.source = "C:/fotos/praia.png";
+    t.text = "Olá";
+    Manifest m = r.manifest;
+    applyTheme(m, t);
+    CHECK(m.source == "C:/fotos/praia.png");
+    CHECK(m.text == "Olá");
+    const auto back = parseTheme(themeToToml(t), false);
+    REQUIRE(back.error.empty());
+    CHECK(*back.theme.source == "C:/fotos/praia.png");
+}
+
+TEST_CASE("pós-processamento e intervalo do texto") {
+    const auto r = parseManifest("[render]\n[inputs]\ntext = \"lines:frases.txt\"\ntext_interval = 30\n"
+                                 "[post]\nglow = 0.6\nscanlines = 0.3\n");
+    REQUIRE(r.error.empty());
+    CHECK(r.manifest.textInterval == doctest::Approx(30.0f));
+    CHECK(r.manifest.post.glow == doctest::Approx(0.6f));
+    CHECK(r.manifest.post.scanlines == doctest::Approx(0.3f));
+    CHECK(r.manifest.post.curvature == 0.0f);
+    CHECK(postFxActive(r.manifest.post));
+    CHECK_FALSE(postFxActive(PostFx{}));
+    CHECK_FALSE(parseManifest("[render]\n[post]\nglow = 2\n").error.empty());
+    CHECK_FALSE(parseManifest("[render]\n[inputs]\ntext_interval = 0\n").error.empty());
+    // Um tema pode ligar efeitos (ex.: um tema "CRT") e o caminho inverso preserva-os.
+    Theme t;
+    t.post[2] = 0.8f; // curvature
+    Manifest m = r.manifest;
+    applyTheme(m, t);
+    CHECK(m.post.curvature == doctest::Approx(0.8f));
+    CHECK(m.post.glow == doctest::Approx(0.6f));
+    CHECK_FALSE(themeIsEmpty(t));
+    const auto back = parseTheme(themeToToml(t), false);
+    REQUIRE(back.error.empty());
+    REQUIRE(back.theme.post[2].has_value());
+    CHECK(*back.theme.post[2] == doctest::Approx(0.8f));
+}
+
+TEST_CASE("um tema pode ligar entradas") {
+    const auto t = parseTheme("base = \"synthwave\"\n[inputs]\naudio = true\ntext = \"lines:x.txt\"\n");
+    REQUIRE(t.error.empty());
+    REQUIRE(t.theme.useAudio.has_value());
+    CHECK(*t.theme.useAudio);
+    CHECK_FALSE(t.theme.useWindows.has_value());
+    CHECK(*t.theme.text == "lines:x.txt");
+    Manifest m;
+    CHECK_FALSE(m.useAudio);
+    applyTheme(m, t.theme);
+    CHECK(m.useAudio);
+    CHECK(m.text == "lines:x.txt");
+    const auto back = parseTheme(themeToToml(t.theme));
+    REQUIRE(back.error.empty());
+    CHECK(*back.theme.useAudio);
+    CHECK_FALSE(parseTheme("base = \"x\"\n[inputs]\naudio = 1\n").error.empty());
+}
+
 TEST_CASE("themeToToml faz o caminho inverso de parseTheme") {
     Theme t;
     t.base = "ripple";

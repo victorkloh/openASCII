@@ -32,6 +32,9 @@ public:
 
     bool valid() const { return srv_ != nullptr; }
     ID3D11ShaderResourceView* srv() const { return srv_.Get(); }
+    // Cobertura média de cada glifo, 0..1 (StructuredBuffer<float>): quanto "brilha" (glow).
+    ID3D11ShaderResourceView* inkSrv() const { return inkSrv_.Get(); }
+    int slotCount() const { return slotCount_; }
     int cellW() const { return cellW_; }
     int cellH() const { return cellH_; }
     int columns() const { return columns_; }
@@ -44,6 +47,8 @@ public:
 
 private:
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv_;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> inkSrv_;
+    int slotCount_ = 0;
     std::unordered_map<char32_t, uint16_t> slots_;
     int cellW_ = 1, cellH_ = 1, columns_ = 1, charsetSize_ = 1, glyphCount_ = 0;
     uint16_t fallback_ = 0;

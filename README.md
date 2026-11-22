@@ -28,6 +28,27 @@
 | **terrain** | paisagem de ruído a deslizar devagar; o rato faz parallax entre terra e nuvens | `desert`, `topo` |
 | **starfield** | voo pelas estrelas; o rato define a direção | `warp`, `braille` |
 
+**Tech demos (v0.5)**: um wallpaper por capacidade do motor, comentados para servirem de exemplo a quem cria os seus (ver `docs/CREATING_WALLPAPERS.md`, secção 6).
+
+| Wallpaper | O que mostra |
+|---|---|
+| **photo** | a tua imagem, GIF ou vídeo em ASCII a cores, com contornos; lupa no rato (por defeito, o teu wallpaper do Windows) |
+| **spectrum** | o som que está a tocar: anel de frequências, barras com picos, ondas de choque na batida |
+| **snow** | neve que assenta em cima das janelas, dos ícones e da barra de tarefas, e cai quando as mexes |
+| **temple** | cena 3D em tempo real (raymarching) com sombras suaves e nevoeiro; o rato roda a câmara |
+| **sandbox** | areia, água e pedra a cair; pintas com o rato (esquerdo areia, direito água, meio pedra) |
+| **fluid** | fluido incompressível a sério (24 passos por frame); arrasta-o com o rato |
+| **coral** / **life** | reação-difusão (corais e labirintos) e o Jogo da Vida com cor e rastos |
+| **fractal** | zoom sem fim no Mandelbrot, a visitar pontos famosos |
+| **hud** | hora, CPU, RAM e o tempo lá fora (cidade nas Definições), com brilho de ecrã |
+| **planet** | planeta procedural com nuvens, cidades à noite e o Sol da estação do ano real |
+| **bonsai** | uma árvore que cresce devagar, diferente cada dia, que muda com as estações |
+| **mirror** | tu em ASCII pela webcam (só liga se aceitares); mexe-te e saltam faíscas |
+| **terminal** | monitor CRT antigo a escrever citações (edita `quotes.txt`) |
+| **arcade** | Breakout que joga sozinho; com o rato no fundo, a raquete é tua |
+
+Temas novos que ligam entradas: `synthwave/beat` (reage à música), `valley/weather` (tempo real), `matrix/code` (o código dos próprios wallpapers).
+
 **Vários monitores = um só efeito.** Com "Estender por todos os monitores" (ligado por defeito), o wallpaper corre numa única tela que cobre todos os ecrãs, como o modo Estender do Windows: uma onda que sai de um monitor entra no outro, os animais do valley atravessam de um ecrã para o outro.
 
 ## Menu da bandeja e launcher

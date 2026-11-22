@@ -3,6 +3,7 @@ name = "Matrix"
 author = "AsciiPaper"
 version = "1.0.0"
 description = "Chuva de caracteres; as colunas desviam-se do cursor"
+category = "Retro"
 
 [render]
 mode = "shader"
@@ -21,3 +22,4 @@ palette = ["#010402", "#003b12", "#00a83a", "#3dff7a"]
 speed   = { default = 1.0, min = 0.1, max = 4.0 }
 density = { default = 0.7, min = 0.1, max = 1.0 } # fração das colunas com chuva
 radius  = { default = 9.0, min = 0.0, max = 30.0 } # raio do desvio à volta do cursor (células)
+code    = { default = 0.0, min = 0.0, max = 1.0 }  # 1 = mostrar o texto de [inputs] text (tema "code")

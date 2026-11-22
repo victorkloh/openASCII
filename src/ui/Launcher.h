@@ -20,7 +20,7 @@ public:
     bool create(HINSTANCE instance);
     void show();
     void refresh(); // o wallpaper ativo ou o catálogo mudaram
-    HRESULT renderToPng(const std::wstring& path, int page);
+    HRESULT renderToPng(const std::wstring& path, int page, int heightDip = 720);
 
 private:
     void build(Ui& ui, float w, float h) override;
@@ -44,6 +44,10 @@ private:
     int selectedSwatch_ = -1; // -1 nenhum, 0 fundo, 1.. paleta
     std::wstring charsetEdit_;
     std::wstring themeName_;
+    std::wstring cityEdit_;   // cidade do tempo real (Definições), em edição
+    std::wstring search_;     // pesquisa na lista de wallpapers
+    bool cityLoaded_ = false;
+    static constexpr UINT kMsgPickSource = WM_APP + 40; // abrir o diálogo de imagem/vídeo (fora da pintura)
     std::wstring message_;    // feedback curto ("Tema guardado")
     std::wstring newName_;
     int templateIndex_ = -1;  // -1 = em branco

@@ -33,11 +33,18 @@ CellOut cell(CellIn i)
     // ---- Dia e noite ----
     float phase = frac(time / (param("daylength") * 60.0) + 0.35);       // começa de manhã
     float sun = sin(phase * 6.2831853);                                    // > 0 de dia
-    float day = smoothstep(-0.25, 0.25, sun);
-    float dusk = saturate(1.0 - abs(sun) * 4.0);                           // nascer/pôr do sol
-
     // ---- Tempo: chuvadas que vêm e vão ao longo de minutos ----
     float storm = smoothstep(0.55, 0.8, noise(float2(time * 0.012, 3.7))) * param("rain");
+
+    // Tema "weather" ([inputs] weather = true): o tempo REAL da cidade das Definições.
+    // O sol segue a elevação verdadeira, a chuva os mm/h e as nuvens a cobertura (weather2.z = dados válidos).
+    if (weather2.z > 0.5)
+    {
+        sun = clamp(weather2.y / 30.0, -1.0, 1.0);
+        storm = saturate(weather.x / 4.0);
+    }
+    float day = smoothstep(-0.25, 0.25, sun);
+    float dusk = saturate(1.0 - abs(sun) * 4.0);                           // nascer/pôr do sol
 
     // ---- Relevo ----
     float v, t;
@@ -123,6 +130,7 @@ CellOut cell(CellIn i)
     // ---- Nuvens (e a sombra delas no chão) ----
     float2 cq = i.world * (param("scale") / 160.0) + drift * 2.5 + par * 0.35 + 40.0;
     float coverage = param("clouds") * (0.75 + storm * 0.6);
+    if (weather2.z > 0.5) coverage = saturate(weather.y * 1.1) * (0.75 + storm * 0.6);
     float cloud = smoothstep(0.58 - coverage * 0.18, 0.78, fbm(cq)) * coverage;
     float shadow = smoothstep(0.58 - coverage * 0.18, 0.78, fbm(cq + float2(0.05, 0.08))) * coverage;
     color.rgb *= 1.0 - shadow * 0.45;

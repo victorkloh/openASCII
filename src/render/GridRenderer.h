@@ -13,6 +13,7 @@
 #include "core/Canvas.h"
 #include "core/Color.h"
 #include "core/Grid.h"
+#include "core/Manifest.h"
 #include "render/GlyphAtlas.h"
 
 namespace ap::render {
@@ -81,7 +82,7 @@ public:
     // monitorRectPx: onde está este monitor no ecrã virtual (para saber que parte do canvas mostrar).
     HRESULT draw(ID3D11Device* device, ID3D11DeviceContext* ctx, const GridPipeline& pipeline,
                  ID3D11RenderTargetView* rtv, const GlyphAtlas& atlas, const CellCanvas& canvas,
-                 const Rect& monitorRectPx, Rgba8 background);
+                 const Rect& monitorRectPx, Rgba8 background, const PostFx& post = {}, float time = 0.0f);
 
 private:
     GridLayout layout_;

@@ -1,0 +1,6 @@
+# O vale com o tempo REAL lá fora: sol à altura verdadeira, chuva e nuvens de agora.
+# Escreve a tua cidade em Definições > Tempo real (sem cidade fica o ciclo simulado).
+base = "valley"
+
+[inputs]
+weather = true

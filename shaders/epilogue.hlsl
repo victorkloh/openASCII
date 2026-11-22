@@ -45,9 +45,17 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 
     CellOut o = cell(i);
 
+    // o.glyph > 0: caractere do charset/sprites; < 0: slot bruto do atlas (asciiGlyph, texto);
+    // 0: a rampa do charset escolhida por o.value.
     uint n = max(charsetSize, 1u);
     uint maxSlot = n + glyphCount - 1u;
-    uint g = o.glyph > 0 ? min((uint)(o.glyph - 1), maxSlot) : min((uint)(saturate(o.value) * n), n - 1);
+    uint g;
+    if (o.glyph > 0)
+        g = min((uint)(o.glyph - 1), maxSlot);
+    else if (o.glyph < 0)
+        g = min((uint)(-(o.glyph + 1)), max(_atlasSlots, 1u) - 1u);
+    else
+        g = min((uint)(saturate(o.value) * n), n - 1);
     _cells[index] = uint3(g, _packColor(o.fg), _packColor(o.bg));
     _stateNext[index] = o.state;
 }

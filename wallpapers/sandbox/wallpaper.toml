@@ -1,0 +1,27 @@
+[meta]
+name = "Sandbox"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "Areia, água e pedra a cair. Botão esquerdo pinta areia, direito água, o do meio pedra; os dois juntos apagam. Tech demo de autómatos celulares com substeps."
+category = "Simulações"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 60
+cell = 9
+scale = 10
+font = "Cascadia Mono"
+charset = " "
+glyphs = ":;%~≈#"   # areia (3 tons), superfície da água, água, pedra
+substeps = 4        # 4 passos da simulação por frame: cai 4 células por frame
+
+[colors]
+background = "#07080b"
+palette = ["#07080b", "#1a1c22", "#3b3d45", "#6b5a3a", "#b98a45", "#e3b765", "#f6dc9a"]
+
+[params]
+flow    = { default = 1.0, min = 0.0, max = 3.0 }  # caudal das bicas
+brush   = { default = 4.0, min = 1.0, max = 15.0 } # tamanho do pincel do rato
+drain   = { default = 1.0, min = 0.0, max = 5.0 }  # quanto o fundo absorve
+shelves = { default = 1.0, min = 0.0, max = 1.0 }  # prateleiras de pedra fixas

@@ -1,0 +1,9 @@
+# Synthwave ao ritmo da música: o sol pulsa com os graves, a grelha pisca na batida e as
+# montanhas viram um equalizador. Escuta a saída de som do PC (nunca o microfone).
+base = "synthwave"
+
+[inputs]
+audio = true
+
+[params]
+beat = 1.0

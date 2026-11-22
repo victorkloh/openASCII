@@ -217,6 +217,27 @@ Estas apps também desenham por trás dos ícones; ao mesmo tempo que nós, apar
 
 `fps = 0` (automático) usa o FPS do wallpaper, limitado por `max_fps`; um valor fixo (15–144) vale para todos e ignora o limite. Mudar o FPS rearma o timer de frames no momento.
 
+## 7i. Entradas dos wallpapers (v0.5)
+
+`src/inputs/InputHub` liga ao motor o que o `[inputs]` do wallpaper ativo pede, e nada mais:
+
+| Entrada | Como | Onde corre |
+|---|---|---|
+| janelas | `EnumWindows` + `DWMWA_EXTENDED_FRAME_BOUNDS` (sem as camufladas nem as transparentes), no máximo a cada 50 ms | thread de UI (~0,1 ms) |
+| ícones | `IShellWindows` → `IFolderView::GetItemPosition` (a via documentada, sem ler memória do Explorer) | thread próprio, de 2 em 2 s |
+| áudio | WASAPI em loopback (a saída, nunca o microfone), FFT de 2048 → 64 bandas log + batida | thread próprio |
+| imagem/GIF | WIC, frames em memória | upload quando muda o frame |
+| vídeo/webcam | Media Foundation (`IMFSourceReader`, RGB32, ≤640 px), só o frame mais recente | thread próprio |
+| sistema | `GetSystemTimes`, `GlobalMemoryStatusEx` | 1x/s |
+| tempo real | WinHTTP para Open-Meteo (geocoding + previsão), só com cidade definida | thread próprio, de 15 em 15 min |
+| texto | ficheiro, pasta de código ou uma linha de cada vez; Latin-1 + tabela de slots do atlas | upload quando muda |
+
+Os obstáculos vão num `StructuredBuffer<int4>` por canvas (em células), o texto num `StructuredBuffer<uint>` (256 slots + codepoints) e a imagem numa `Texture2D` com sampler linear (t1–t3, s0). O cbuffer `Frame` cresceu para 864 bytes (espectro, níveis, sistema, tempo, tamanho da imagem, texto).
+
+**Pós-processamento** (`[post]`): no `grid.hlsl`, só quando algum efeito está ligado (bit 0 de `flags`). O glow soma as 15 células vizinhas pesadas pela "tinta" de cada glifo (cobertura média calculada ao construir o atlas, num `StructuredBuffer<float>`).
+
+**Loops modais** (arrastar, menus, diálogos): o Windows despacha as mensagens por nós e o `MsgWait` não corre. `setModalLoop(true)` regista uma espera do threadpool sobre o próprio timer de alta resolução dos frames, que publica `WM_APP_MODAL_FRAME` à hora certa. Os botões da barra de título (que usam um loop que só lê o rato) são tratados à mão, sem loop.
+
 ## 8. Pausas (pausar = 0% de CPU)
 
 As razões são **bits** (`PauseReason`), avaliados **por monitor** pela função pura `evaluatePause` (testada):

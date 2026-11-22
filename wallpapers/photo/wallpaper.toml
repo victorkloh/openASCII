@@ -1,0 +1,36 @@
+[meta]
+name = "Photo"
+author = "AsciiPaper"
+version = "1.0.0"
+description = "A tua imagem, GIF ou vídeo em ASCII a cores, com contornos e uma lupa no rato. Tech demo de [inputs] source."
+category = "Dados e média"
+
+[render]
+mode = "shader"
+entry = "main.hlsl"
+fps = 30
+cell = 9
+scale = 10
+font = "Cascadia Mono"
+# Rampa longa (70 níveis): mais tons de cinzento = mais detalhe na foto.
+charset = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$"
+glyphs = "-/|\\"   # traços das arestas
+
+[inputs]
+# "wallpaper" = o wallpaper do Windows que o AsciiPaper substituiu. Também aceita um caminho
+# (relativo a esta pasta, ou absoluto, com %VARIAVEIS%): .png .jpg .bmp .gif .mp4 .mov .wmv
+source = "wallpaper"
+
+[colors]
+background = "#06070a"
+palette = ["#06070a", "#1b2a3a", "#4f7a9a", "#a8d0e6", "#f2fbff"]
+
+[params]
+color    = { default = 1.0,  min = 0.0, max = 1.0 }  # 0 = paleta, 1 = cores da imagem
+contrast = { default = 1.15, min = 0.5, max = 2.5 }
+edges    = { default = 0.45, min = 0.0, max = 1.0 }  # quantos contornos desenhar
+fill     = { default = 0.6,  min = 0.0, max = 1.0 }  # cor no fundo das células
+zoom     = { default = 0.12, min = 0.0, max = 0.5 }  # amplitude do zoom lento
+speed    = { default = 1.0,  min = 0.0, max = 4.0 }
+lens     = { default = 1.0,  min = 0.0, max = 3.0 }  # tamanho da lupa do rato
+span     = { default = 0.0,  min = 0.0, max = 1.0 }  # 1 = uma imagem estendida por todos os monitores

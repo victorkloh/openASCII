@@ -89,6 +89,15 @@ std::optional<float> getScale(const toml::table& t) {
     return s;
 }
 
+// Um valor de [post]: número entre 0 e 1.
+std::optional<float> getPostValue(const toml::table& t, std::string_view key) {
+    const toml::node* n = t.get(key);
+    if (!n) return std::nullopt;
+    const auto v = n->value<double>();
+    if (!v || *v < 0.0 || *v > 1.0) throw Invalid{std::format("post.{} tem de ser um número entre 0 e 1{}", key, where(*n))};
+    return static_cast<float>(*v);
+}
+
 void parseParams(const toml::table& params, Manifest& m) {
     for (auto&& [key, node] : params) {
         const std::string name(key.str());
@@ -133,6 +142,19 @@ std::string catchErrors(Fn&& fn) {
 
 } // namespace
 
+float& postFxValue(PostFx& fx, size_t i) {
+    float* v[] = {&fx.glow, &fx.scanlines, &fx.curvature, &fx.vignette, &fx.aberration, &fx.grain};
+    return *v[std::min(i, std::size(v) - 1)];
+}
+
+float postFxValue(const PostFx& fx, size_t i) { return postFxValue(const_cast<PostFx&>(fx), i); }
+
+bool postFxActive(const PostFx& fx) {
+    for (size_t i = 0; i < kPostFxNames.size(); ++i)
+        if (postFxValue(fx, i) > 0.0f) return true;
+    return false;
+}
+
 float clampParam(const ParamSpec& p, float v) {
     if (!(v == v)) return p.defaultValue; // NaN
     return std::clamp(v, p.min, p.max);
@@ -161,6 +183,7 @@ ManifestResult parseManifest(std::string_view text) {
             m.author = getString(*meta, "author").value_or("");
             m.version = getString(*meta, "version").value_or("");
             m.description = getString(*meta, "description").value_or("");
+            m.category = getString(*meta, "category").value_or("");
         }
 
         const toml::table* render = root["render"].as_table();
@@ -188,6 +211,35 @@ ManifestResult parseManifest(std::string_view text) {
         if (render->contains("glyphs")) {
             m.glyphs = getCharset(*render, "glyphs").value_or(U"");
             if (m.glyphs.size() > 256) throw Invalid{"render.glyphs tem no máximo 256 caracteres"};
+        }
+        m.substeps = getInt(*render, "substeps", 1, 64).value_or(m.substeps);
+
+        if (const toml::table* in = root["inputs"].as_table()) {
+            auto flag = [&](std::string_view key, bool def) {
+                const toml::node* n = in->get(key);
+                if (!n) return def;
+                if (!n->is_boolean()) throw Invalid{std::format("inputs.{} tem de ser true ou false{}", key, where(*n))};
+                return n->value<bool>().value_or(def);
+            };
+            m.useWindows = flag("windows", false);
+            m.useIcons = flag("icons", false);
+            m.useAudio = flag("audio", false);
+            m.useSystem = flag("system", false);
+            m.useWeather = flag("weather", false);
+            m.source = getString(*in, "source").value_or("");
+            m.text = getString(*in, "text").value_or("");
+            if (const toml::node* n = in->get("text_interval")) {
+                const auto v = n->value<double>();
+                if (!v || *v < 1.0 || *v > 3600.0) {
+                    throw Invalid{std::format("inputs.text_interval tem de ser um número entre 1 e 3600{}", where(*n))};
+                }
+                m.textInterval = static_cast<float>(*v);
+            }
+        }
+        if (const toml::table* post = root["post"].as_table()) {
+            for (size_t i = 0; i < kPostFxNames.size(); ++i) {
+                if (auto v = getPostValue(*post, kPostFxNames[i])) postFxValue(m.post, i) = *v;
+            }
         }
 
         if (const toml::table* colors = root["colors"].as_table()) {
@@ -220,6 +272,26 @@ ThemeResult parseTheme(std::string_view text, bool requireBase) {
         t.charset = getCharset(root, "charset");
         t.background = getColor(root, "background");
         t.palette = getPalette(root, "palette");
+        t.source = getString(root, "source");
+        t.text = getString(root, "text");
+        if (const toml::table* post = root["post"].as_table()) {
+            for (size_t i = 0; i < kPostFxNames.size(); ++i) t.post[i] = getPostValue(*post, kPostFxNames[i]);
+        }
+        if (const toml::table* in = root["inputs"].as_table()) {
+            auto flag = [&](std::string_view key) -> std::optional<bool> {
+                const toml::node* n = in->get(key);
+                if (!n) return std::nullopt;
+                if (!n->is_boolean()) throw Invalid{std::format("inputs.{} tem de ser true ou false{}", key, where(*n))};
+                return n->value<bool>();
+            };
+            t.useWindows = flag("windows");
+            t.useIcons = flag("icons");
+            t.useAudio = flag("audio");
+            t.useSystem = flag("system");
+            t.useWeather = flag("weather");
+            if (auto s = getString(*in, "source")) t.source = s;
+            if (auto s = getString(*in, "text")) t.text = s;
+        }
         if (const toml::table* params = root["params"].as_table()) {
             for (auto&& [key, node] : *params) {
                 if (!node.is_number()) {
@@ -242,6 +314,15 @@ std::vector<std::string> applyTheme(Manifest& m, const Theme& t) {
     if (t.charset) m.charset = *t.charset;
     if (t.background) m.background = *t.background;
     if (t.palette) m.palette = *t.palette;
+    if (t.source) m.source = *t.source;
+    if (t.text) m.text = *t.text;
+    for (size_t i = 0; i < kPostFxNames.size(); ++i)
+        if (t.post[i]) postFxValue(m.post, i) = *t.post[i];
+    if (t.useWindows) m.useWindows = *t.useWindows;
+    if (t.useIcons) m.useIcons = *t.useIcons;
+    if (t.useAudio) m.useAudio = *t.useAudio;
+    if (t.useSystem) m.useSystem = *t.useSystem;
+    if (t.useWeather) m.useWeather = *t.useWeather;
     for (const auto& [name, value] : t.params) {
         if (ParamSpec* p = m.findParam(name)) {
             p->value = clampParam(*p, value);
@@ -273,11 +354,25 @@ std::string themeToToml(const Theme& t, std::string_view headerComment) {
     if (t.fps) root.insert("fps", *t.fps);
     if (t.charset) root.insert("charset", encodeUtf8(*t.charset));
     if (t.background) root.insert("background", colorHex(*t.background));
+    if (t.source) root.insert("source", *t.source);
+    if (t.text) root.insert("text", *t.text);
     if (t.palette) {
         toml::array arr;
         for (const Rgba8& c : *t.palette) arr.push_back(colorHex(c));
         root.insert("palette", std::move(arr));
     }
+    toml::table post;
+    for (size_t i = 0; i < kPostFxNames.size(); ++i)
+        if (t.post[i]) post.insert(kPostFxNames[i], static_cast<double>(*t.post[i]));
+    if (!post.empty()) root.insert("post", std::move(post));
+    toml::table inputs;
+    const std::pair<const char*, const std::optional<bool>*> flags[] = {
+        {"windows", &t.useWindows}, {"icons", &t.useIcons},     {"audio", &t.useAudio},
+        {"system", &t.useSystem},   {"weather", &t.useWeather},
+    };
+    for (const auto& [key, v] : flags)
+        if (*v) inputs.insert(key, **v);
+    if (!inputs.empty()) root.insert("inputs", std::move(inputs));
     if (!t.params.empty()) {
         toml::table params;
         for (const auto& [name, value] : t.params) params.insert(name, static_cast<double>(value));
@@ -291,7 +386,9 @@ std::string themeToToml(const Theme& t, std::string_view headerComment) {
 
 bool themeIsEmpty(const Theme& t) {
     return !t.font && !t.fontWeight && !t.cell && !t.scale && !t.fps && !t.charset && !t.background &&
-           !t.palette && t.params.empty();
+           !t.palette && !t.source && !t.text && t.params.empty() &&
+           std::none_of(t.post.begin(), t.post.end(), [](const auto& v) { return v.has_value(); }) &&
+           !t.useWindows && !t.useIcons && !t.useAudio && !t.useSystem && !t.useWeather;
 }
 
 bool looksLikeTheme(std::string_view text) {

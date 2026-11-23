@@ -97,8 +97,11 @@ CellOut cell(CellIn i)
             np.y = (paddleRow() - 0.6) * wpc.y;
         }
         // Tijolos: se a próxima célula tem um tijolo vivo, ressalta e regista o choque.
+        // O tijolo atingido no frame anterior (H) ainda aparece vivo em prev() neste frame (só
+        // se apaga agora): conta como morto, senão pontuava duas vezes e o nível acabava cedo.
         int2 nc = int2(floor(cellF));
-        if (brickAlive(nc))
+        bool hitBefore = H.z > 0.5 && all(brickOrigin(int2(H.xy)) == brickOrigin(nc));
+        if (brickAlive(nc) && !hitBefore)
         {
             int2 pc = int2(floor(pos / wpc));
             if (pc.y != nc.y) vel.y = -vel.y; else vel.x = -vel.x;

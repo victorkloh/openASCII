@@ -218,6 +218,10 @@ Theme loadOverrides(const std::string& key) {
         log::warn(L"Ajustes de {} inválidos ({}); ignorados", toWide(key), toWide(r.error));
         return {};
     }
+    // Ajustes gravados antes de existir charset_only: quem escolheu um conjunto queria vê-lo
+    // em tudo (era a queixa: os peixes do aquário continuavam com < > ° ~). Só para os ajustes
+    // do utilizador; os temas dos autores mantêm o que dizem.
+    if (r.theme.charset && !r.theme.charsetOnly) r.theme.charsetOnly = true;
     return r.theme;
 }
 

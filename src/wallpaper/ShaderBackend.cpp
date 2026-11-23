@@ -54,13 +54,24 @@ render::CompiledShader compileWallpaperShader(const Manifest& manifest, const st
     }
     std::error_code ec;
     if (!cacheFile.empty() && std::filesystem::exists(cacheFile, ec)) {
-        std::ifstream in(cacheFile, std::ios::binary);
-        std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        std::string bytes;
+        {
+            std::ifstream in(cacheFile, std::ios::binary);
+            bytes.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        }
+        // Um DXBC começa por "DXBC" e guarda o tamanho total no byte 24: um ficheiro cortado
+        // (app morta a meio da escrita) é apagado e recompilado em vez de falhar para sempre.
+        uint32_t declared = 0;
+        if (bytes.size() >= 32) memcpy(&declared, bytes.data() + 24, sizeof(declared));
+        const bool valid = bytes.size() >= 32 && bytes.compare(0, 4, "DXBC") == 0 && declared == bytes.size();
         render::CompiledShader cached;
-        if (!bytes.empty() && SUCCEEDED(D3DCreateBlob(bytes.size(), &cached.blob))) {
+        if (valid && SUCCEEDED(D3DCreateBlob(bytes.size(), &cached.blob))) {
             memcpy(cached.blob->GetBufferPointer(), bytes.data(), bytes.size());
+            cached.cacheFile = cacheFile.wstring();
             return cached;
         }
+        log::warn(L"Cache de shaders: {} estava inválido; a recompilar", cacheFile.filename().wstring());
+        std::filesystem::remove(cacheFile, ec);
     }
     render::CompiledShader out2 = render::compileShader(source, entryName.c_str(), "CSMain", "cs_5_0");
     if (out2.ok() && !cacheFile.empty()) {
@@ -75,9 +86,20 @@ render::CompiledShader compileWallpaperShader(const Manifest& manifest, const st
             });
             for (size_t k = 0; k + 150 < entries.size(); ++k) std::filesystem::remove(entries[k].path(), ec);
         }
-        std::ofstream o(cacheFile, std::ios::binary | std::ios::trunc);
-        o.write(static_cast<const char*>(out2.blob->GetBufferPointer()),
-                static_cast<std::streamsize>(out2.blob->GetBufferSize()));
+        // Escrever num temporário e só depois trocar: quem ler (outra instância, ou nós no
+        // próximo arranque) vê o ficheiro inteiro ou nenhum, nunca meio ficheiro.
+        std::filesystem::path tmp = cacheFile;
+        tmp += std::format(L".{}.tmp", GetCurrentProcessId());
+        bool written = false;
+        {
+            std::ofstream o(tmp, std::ios::binary | std::ios::trunc);
+            o.write(static_cast<const char*>(out2.blob->GetBufferPointer()),
+                    static_cast<std::streamsize>(out2.blob->GetBufferSize()));
+            written = o.good();
+        }
+        if (!written || !MoveFileExW(tmp.c_str(), cacheFile.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+            std::filesystem::remove(tmp, ec);
+        }
     }
     return out2;
 }

@@ -3,6 +3,9 @@
 #include "util/Log.h"
 #include "util/Win32.h"
 
+#include <algorithm>
+#include <format>
+
 namespace ap::desktop {
 
 namespace {
@@ -114,15 +117,70 @@ bool WorkerW::adopt(HWND child) const {
     return true;
 }
 
-void WorkerW::place(HWND child, const Rect& screenRect) const {
+void WorkerW::place(HWND child, const Rect& screenRect, bool frameChanged) const {
     const Rect r = toParentSpace(screenRect, hostOrigin());
-    HWND after = insertAfter_ ? insertAfter_ : HWND_TOP;
+    HWND after = insertAfter_ && IsWindow(insertAfter_) ? insertAfter_ : HWND_TOP;
     SetWindowPos(child, after, r.left, r.top, r.width(), r.height(),
-                 SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-    if (workerChild_) {
+                 SWP_NOACTIVATE | SWP_NOOWNERZORDER | (frameChanged ? SWP_FRAMECHANGED : 0));
+    if (workerChild_ && IsWindow(workerChild_)) {
         // 24H2+: o WorkerW (que pinta o wallpaper estático) tem de ficar por baixo de nós.
         SetWindowPos(workerChild_, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
+}
+
+bool WorkerW::isPlaced(HWND child, const Rect& screenRect) {
+    RECT wr{};
+    return child && GetWindowRect(child, &wr) && wr.left == screenRect.left && wr.top == screenRect.top &&
+           wr.right == screenRect.right && wr.bottom == screenRect.bottom;
+}
+
+std::wstring WorkerW::enforceOrder(const std::vector<HWND>& ours) const {
+    if (!isValid() || layout_ == Layout::Classic || ours.empty()) {
+        return {}; // no layout clássico somos os únicos filhos do WorkerW
+    }
+    auto isOurs = [&](HWND h) { return std::find(ours.begin(), ours.end(), h) != ours.end(); };
+    const HWND icons = insertAfter_ && IsWindow(insertAfter_) ? insertAfter_ : nullptr;
+
+    // De cima para baixo: os ícones, depois TODAS as nossas janelas seguidas. Qualquer janela
+    // visível do Explorer entre os ícones e a última das nossas está a tapar-nos.
+    std::wstring intruder;
+    bool afterIcons = icons == nullptr;
+    size_t seen = 0;
+    for (HWND c = GetWindow(host_, GW_CHILD); c && seen < ours.size(); c = GetWindow(c, GW_HWNDNEXT)) {
+        if (c == icons) {
+            afterIcons = true;
+        } else if (isOurs(c)) {
+            if (!afterIcons) {
+                intruder = L"as nossas janelas estavam por cima dos ícones";
+                break;
+            }
+            ++seen;
+        } else if (afterIcons && IsWindowVisible(c)) {
+            DWORD pid = 0;
+            GetWindowThreadProcessId(c, &pid);
+            intruder = std::format(L"{} {} (pid {})", win::className(c), win::hwndStr(c), pid);
+            break;
+        }
+    }
+    if (intruder.empty()) {
+        return {};
+    }
+
+    HWND prev = icons ? icons : HWND_TOP;
+    for (HWND h : ours) {
+        SetWindowPos(h, prev, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        prev = h;
+    }
+    if (workerChild_ && IsWindow(workerChild_)) {
+        SetWindowPos(workerChild_, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+    return intruder;
+}
+
+DWORD WorkerW::explorerProcessId() const {
+    DWORD pid = 0;
+    if (HWND h = progman_ ? progman_ : host_) GetWindowThreadProcessId(h, &pid);
+    return pid;
 }
 
 Point WorkerW::hostOrigin() const {

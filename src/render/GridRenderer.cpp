@@ -129,7 +129,7 @@ void CellCanvas::writeText(ID3D11DeviceContext* ctx, const GlyphAtlas& atlas, in
     for (char32_t cp : decodeUtf8(text)) {
         if (col + static_cast<int>(line.size()) >= layout_.cols) break;
         if (cp == U'\t') cp = U' ';
-        line.push_back({atlas.slot(cp), fg.packed(), bg.packed()}); // sem glifo -> '?'
+        line.push_back({atlas.textSlot(cp), fg.packed(), bg.packed()}); // sem glifo -> '?'
     }
     if (line.empty()) return;
     // UpdateSubresource num buffer: a "caixa" é em bytes.

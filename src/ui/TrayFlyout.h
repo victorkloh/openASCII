@@ -26,6 +26,7 @@ private:
     void place(const RECT& anchorPx);
     float layoutHeight();
     float fixedHeight() const;       // tudo menos a grelha (layoutHeight e build usam a mesma conta)
+    float gridAreaHeight(float rows) const; // altura da grelha com no máximo `rows` linhas à vista
     float gridContentHeight() const; // altura total da grelha de wallpapers
     std::wstring activeBase() const;
     int activeIndex() const;         // índice em bases_ do wallpaper em uso (-1 = nenhum)

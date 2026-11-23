@@ -52,7 +52,8 @@ struct alignas(16) FrameConstants {
     uint32_t textLength, windowCount;
     float textInfo[4];                               // "lines:": idade da linha (s), índice, total, intervalo
     uint32_t atlasSlots;                             // glifos no atlas (limite dos glifos brutos)
-    uint32_t pad[3];
+    float stepTime;                                  // tempo com volta a cada hora (fixedStep)
+    uint32_t pad[2];
 };
 static_assert(sizeof(FrameConstants) == 864, "tem de bater com o cbuffer Frame do prelude.hlsl");
 

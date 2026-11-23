@@ -83,6 +83,13 @@ std::optional<std::u32string> getCharset(const toml::table& t, std::string_view 
     return cs;
 }
 
+std::optional<bool> getBool(const toml::table& t, std::string_view key) {
+    const toml::node* n = t.get(key);
+    if (!n) return std::nullopt;
+    if (!n->is_boolean()) throw Invalid{std::format("'{}' tem de ser true ou false{}", key, where(*n))};
+    return n->value<bool>();
+}
+
 std::optional<float> getScale(const toml::table& t) {
     auto s = getNumber(t, "scale");
     if (s && (*s < 1.0f || *s > 400.0f)) throw Invalid{"'scale' tem de estar entre 1 e 400"};
@@ -208,6 +215,7 @@ ManifestResult parseManifest(std::string_view text) {
         m.font = getString(*render, "font").value_or(m.font);
         m.fontWeight = getInt(*render, "font_weight", 100, 950).value_or(m.fontWeight);
         m.charset = getCharset(*render, "charset").value_or(m.charset);
+        m.charsetOnly = getBool(*render, "charset_only").value_or(m.charsetOnly);
         if (render->contains("glyphs")) {
             m.glyphs = getCharset(*render, "glyphs").value_or(U"");
             if (m.glyphs.size() > 256) throw Invalid{"render.glyphs tem no máximo 256 caracteres"};
@@ -270,6 +278,7 @@ ThemeResult parseTheme(std::string_view text, bool requireBase) {
         t.scale = getScale(root);
         t.fps = getInt(root, "fps", 1, 240);
         t.charset = getCharset(root, "charset");
+        t.charsetOnly = getBool(root, "charset_only");
         t.background = getColor(root, "background");
         t.palette = getPalette(root, "palette");
         t.source = getString(root, "source");
@@ -312,6 +321,7 @@ std::vector<std::string> applyTheme(Manifest& m, const Theme& t) {
     if (t.scale) m.scale = *t.scale;
     if (t.fps) m.fps = *t.fps;
     if (t.charset) m.charset = *t.charset;
+    if (t.charsetOnly) m.charsetOnly = *t.charsetOnly;
     if (t.background) m.background = *t.background;
     if (t.palette) m.palette = *t.palette;
     if (t.source) m.source = *t.source;
@@ -353,6 +363,7 @@ std::string themeToToml(const Theme& t, std::string_view headerComment) {
     if (t.scale) root.insert("scale", static_cast<double>(*t.scale));
     if (t.fps) root.insert("fps", *t.fps);
     if (t.charset) root.insert("charset", encodeUtf8(*t.charset));
+    if (t.charsetOnly) root.insert("charset_only", *t.charsetOnly);
     if (t.background) root.insert("background", colorHex(*t.background));
     if (t.source) root.insert("source", *t.source);
     if (t.text) root.insert("text", *t.text);
@@ -385,7 +396,7 @@ std::string themeToToml(const Theme& t, std::string_view headerComment) {
 }
 
 bool themeIsEmpty(const Theme& t) {
-    return !t.font && !t.fontWeight && !t.cell && !t.scale && !t.fps && !t.charset && !t.background &&
+    return !t.font && !t.fontWeight && !t.cell && !t.scale && !t.fps && !t.charset && !t.charsetOnly && !t.background &&
            !t.palette && !t.source && !t.text && t.params.empty() &&
            std::none_of(t.post.begin(), t.post.end(), [](const auto& v) { return v.has_value(); }) &&
            !t.useWindows && !t.useIcons && !t.useAudio && !t.useSystem && !t.useWeather;

@@ -39,6 +39,7 @@ constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Ru
 constexpr UINT WM_APP_TRAY = WM_APP + 10;
 constexpr UINT WM_APP_LOAD_DONE = WM_APP + 11; // terminou a compilação em segundo plano
 constexpr UINT WM_APP_MODAL_FRAME = WM_APP + 12; // é hora de um frame durante um loop modal
+constexpr UINT WM_APP_CHECK_ORDER = WM_APP + 13; // o Explorer mexeu nos filhos da anfitriã
 
 enum TimerId : UINT_PTR {
     TIMER_LAYOUT = 1,      // mudança de monitores/DPI (com debounce)
@@ -235,7 +236,7 @@ bool App::init() {
     // O wallpaper é carregado e compilado ANTES de criar as janelas: assim o primeiro
     // frame já é o wallpaper a sério (sem flash preto nem cor provisória).
     wallpaper::loadShaderLibrary();
-    loadWallpaperSync(initialWallpaperPath());
+    if (const fs::path initial = initialWallpaperPath(); !initial.empty()) loadWallpaperSync(initial);
 
     // Modos que só desenham a interface num PNG e saem.
     if (!options_.uiScreenshot.empty() || !options_.flyoutScreenshot.empty()) {
@@ -276,6 +277,12 @@ bool App::init() {
     // ---- Modo wallpaper ----
     g_originalWallpaper = desktop::currentWallpaper();
     log::info(L"Wallpaper original do Windows: \"{}\"", g_originalWallpaper);
+    if (g_originalWallpaper.find(L"DesktopSpotlight") != std::wstring::npos) {
+        // O Spotlight troca o fundo sozinho e o Explorer reordena as janelas do ambiente de
+        // trabalho quando o faz. checkDesktopOrder() repõe-nos por cima; fica no log para
+        // ajudar a diagnosticar piscadelas.
+        log::info(L"O fundo do Windows está no Windows Spotlight (troca sozinho); a vigiar a ordem das janelas");
+    }
 
     // Explorer reiniciou -> a barra de tarefas envia esta mensagem a todas as janelas de topo.
     taskbarCreated_ = RegisterWindowMessageW(L"TaskbarCreated");
@@ -328,6 +335,7 @@ void App::shutdown() {
     flyout_.reset();
     gfx_.reset();
     winEventHooks_.clear();
+    shellOrderHook_.reset();
     batterySaverNotify_.reset();
     if (sessionNotify_) {
         WTSUnRegisterSessionNotification(controller_);
@@ -375,6 +383,9 @@ bool App::createController() {
         log::error(L"Janela controladora falhou (erro {})", GetLastError());
         return false;
     }
+    // Uma segunda instância (ex.: o atalho do Menu Iniciar) pede-nos para abrir o launcher.
+    openLauncherMsg_ = RegisterWindowMessageW(kOpenLauncherMessage);
+    ChangeWindowMessageFilterEx(controller_, openLauncherMsg_, MSGFLT_ALLOW, nullptr);
     return true;
 }
 
@@ -539,6 +550,8 @@ void App::stopFrameTimer() {
 }
 
 bool App::anyActive() const {
+    // Sem nenhum wallpaper (instalado sem os predefinidos) as janelas estão escondidas.
+    if (!hasWallpaper_ && !options_.windowed) return false;
     return std::any_of(surfaces_.begin(), surfaces_.end(), [](const auto& s) {
         return s->hasSwapChain() && !any(s->pause);
     });
@@ -551,13 +564,24 @@ bool App::anyActive() const {
 fs::path App::initialWallpaperPath() const {
     const std::wstring wanted = !options_.wallpaper.empty() ? options_.wallpaper : widen(config_.wallpaper);
     fs::path p = wallpaper::resolveWallpaper(wanted);
-    if (p.empty() && options_.wallpaper.empty() && config_.wallpaper != "ripple") {
-        log::warn(L"Wallpaper \"{}\" da config não encontrado; a usar \"ripple\"", wanted);
-        p = wallpaper::resolveWallpaper(L"ripple");
+    if (!p.empty() || !options_.wallpaper.empty()) {
+        if (p.empty()) {
+            log::error(L"Wallpaper \"{}\" não encontrado em nenhuma pasta de wallpapers", wanted);
+            p = fs::path(wanted); // --wallpaper explícito: mostrar o erro
+        }
+        return p;
+    }
+    // O da config desapareceu (apagado, ou instalado sem os predefinidos): o ripple, ou o
+    // primeiro que houver. Sem nenhum, vazio: a app fica na bandeja sem tapar o fundo do Windows.
+    if (config_.wallpaper != "ripple") p = wallpaper::resolveWallpaper(L"ripple");
+    if (p.empty()) {
+        const auto all = wallpaper::listWallpapers();
+        if (!all.empty()) p = all.front().path;
     }
     if (p.empty()) {
-        log::error(L"Wallpaper \"{}\" não encontrado em nenhuma pasta de wallpapers", wanted);
-        p = fs::path(wanted);
+        log::info(L"Nenhum wallpaper instalado: o fundo do Windows fica até criares ou aplicares um");
+    } else if (!wanted.empty()) {
+        log::warn(L"Wallpaper \"{}\" da config não encontrado; a usar {}", wanted, p.filename().wstring());
     }
     return p;
 }
@@ -582,10 +606,13 @@ void App::loadWallpaperSync(const fs::path& path) {
     log::info(L"Wallpaper carregado e compilado em {:.0f} ms", (qpcNow() - t0) * 1000.0 / qpcFrequency_);
 }
 
-void App::loadWallpaperAsync(const fs::path& path) {
+void App::loadWallpaperAsync(const fs::path& path, bool force) {
     if (pendingLoad_.valid()) {
         // Já há uma compilação a decorrer: este pedido fica em fila (só o mais recente conta)
         // e começa assim que a atual acabar. Antes, o pedido perdia-se e era preciso clicar 2x.
+        // `force` (hot reload): o ficheiro mudou DEPOIS de a compilação atual começar, por isso
+        // tem de correr mesmo que seja o wallpaper que está a ser aplicado.
+        queuedForce_ = force || (queuedForce_ && samePath(queuedLoad_, path));
         queuedLoad_ = path;
         return;
     }
@@ -623,6 +650,18 @@ void App::applyLoadJob(LoadJob job) {
             wallpaperPath_ = job.path;
         }
     } else if (FAILED(program_.create(device_.device(), job.shader.blob.Get()))) {
+        if (!job.shader.cacheFile.empty()) {
+            // A cache no disco tinha um shader que o driver recusa (ficheiro estragado, driver
+            // novo...): apagá-lo e compilar de novo, em vez de falhar em todos os arranques.
+            log::warn(L"O shader em cache foi recusado; a apagar {} e a recompilar", job.shader.cacheFile);
+            std::error_code ec;
+            fs::remove(job.shader.cacheFile, ec);
+            const auto& w = job.load.wallpaper;
+            job.shader = wallpaper::compileWallpaperShader(w.manifest, w.source, w.manifest.entry);
+            job.shader.cacheFile.clear(); // só uma nova tentativa
+            applyLoadJob(std::move(job));
+            return;
+        }
         errorText_ = "CreateComputeShader falhou (ver log)";
     } else {
         if (!job.shader.errors.empty()) log::debug(L"Avisos do compilador: {}", widen(job.shader.errors));
@@ -721,6 +760,13 @@ void App::onManifestChanged() {
     prepareAllSurfaces();
     rebuildCanvases();
     renderAllNow();
+    // O primeiro wallpaper (a app arrancou sem nenhum): mostrar as janelas, já com um frame.
+    if (!options_.windowed && controller_ && !surfaces_.empty()) {
+        for (auto& s : surfaces_) {
+            if (s->hwnd() && !IsWindowVisible(s->hwnd())) s->show();
+        }
+        checkOtherApps(); // só faz alguma coisa da primeira vez
+    }
     if (controller_ && !surfaces_.empty()) updatePause(); // o fps pode ter mudado
 }
 
@@ -934,7 +980,8 @@ ui::GlobalSettings App::settings() const {
     s.otherAppsOnStart = config_.otherAppsOnStart == "pause" ? 1 : config_.otherAppsOnStart == "ignore" ? 2 : 0;
     s.otherAppsOnExit = config_.otherAppsOnExit == "resume" ? 1 : config_.otherAppsOnExit == "keep" ? 2 : 0;
     s.weatherCity = widen(config_.weatherCity);
-    s.webcamAllowed = config_.webcamAllowed;
+    // O estado efetivo: um "Ligar a webcam" sem "lembrar" também conta (a câmara está ligada).
+    s.webcamAllowed = config_.webcamAllowed || webcamAllowedSession_;
     s.playlistMinutes = config_.playlistMinutes;
     s.playlistShuffle = config_.playlistShuffle;
     s.playlistCount = static_cast<int>(config_.playlist.size());
@@ -969,9 +1016,17 @@ void App::setSettings(const ui::GlobalSettings& s) {
     config_.otherAppsOnStart = onStart[std::clamp(s.otherAppsOnStart, 0, 2)];
     config_.otherAppsOnExit = onExit[std::clamp(s.otherAppsOnExit, 0, 2)];
     const std::string city = win::toUtf8(s.weatherCity);
-    const bool inputsChanged = city != config_.weatherCity || s.webcamAllowed != config_.webcamAllowed;
+    // A interface mostra o estado efetivo (permanente OU só desta sessão). Só há mudança se o
+    // utilizador mexeu no interruptor: desligá-lo desliga também a autorização da sessão (antes
+    // a câmara ficava ligada com o interruptor desligado); ligá-lo grava a autorização.
+    const bool webcamBefore = config_.webcamAllowed || webcamAllowedSession_;
+    const bool webcamChanged = s.webcamAllowed != webcamBefore;
+    const bool inputsChanged = city != config_.weatherCity || webcamChanged;
     config_.weatherCity = city;
-    config_.webcamAllowed = s.webcamAllowed;
+    if (webcamChanged) {
+        config_.webcamAllowed = s.webcamAllowed;
+        if (!s.webcamAllowed) webcamAllowedSession_ = false;
+    }
     const bool playlistChanged = s.playlistMinutes != config_.playlistMinutes;
     config_.playlistMinutes = std::clamp(s.playlistMinutes, 0, 24 * 60);
     config_.playlistShuffle = s.playlistShuffle;
@@ -1023,6 +1078,10 @@ void App::resumeSuspendedApps() {
 }
 
 void App::checkOtherApps() {
+    // Sem wallpaper nenhum não tapamos o fundo: não há razão para pausar o Wallpaper Engine.
+    // Fica para quando o primeiro wallpaper aparecer (onManifestChanged).
+    if (!hasWallpaper_ || otherAppsChecked_) return;
+    otherAppsChecked_ = true;
     const auto apps = desktop::detectOtherWallpaperApps();
     if (apps.empty()) return;
     const std::wstring names = desktop::describeApps(apps);
@@ -1103,6 +1162,7 @@ HRESULT App::prepareSurface(render::MonitorSurface& s) {
     desc.cellHeightPx = scaleByDpi(m.cell, s.monitor.dpi ? s.monitor.dpi : 96);
     desc.charset = m.charset;
     desc.glyphs = m.glyphs;
+    desc.charsetOnly = m.charsetOnly;
     if (!s.atlas.valid() || s.atlas.key() != desc.key()) {
         if (HRESULT hr = s.atlas.build(device_.device(), dwrite_.Get(), desc); FAILED(hr)) return hr;
     }
@@ -1168,6 +1228,10 @@ wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const
 
     f.time = static_cast<float>(time);
     f.dt = static_cast<float>(dt);
+    // Em double e com volta a cada hora: um float pequeno tem precisão de sobra para
+    // fixedStep(), por muitos dias que a app esteja ligada. 3600 é múltiplo de 1/hz para
+    // qualquer hz inteiro, por isso a volta conta como um passo normal.
+    f.stepTime = static_cast<float>(std::fmod(time, 3600.0));
     f.gridW = static_cast<uint32_t>(c.cols);
     f.gridH = static_cast<uint32_t>(c.rows);
 
@@ -1191,6 +1255,7 @@ wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const
         f.clickY = toCellY(mouse_.clickPos.y);
         f.clickTime = static_cast<float>(qpcToSeconds(mouse_.clickQpc));
         f.clickButton = mouse_.clickButton;
+        f.clicked = track.clickPending ? 1u : 0u; // justClicked(); o ShaderBackend zera-o depois do 1º passo
     } else {
         f.clickX = f.clickY = -10000.0f;
         f.clickTime = -1000.0f;
@@ -1260,6 +1325,8 @@ void App::computeCanvas(render::CellCanvas& canvas, double time, double dt) {
         wallpaper::FrameConstants f = makeFrame(canvas, *ref, time, dt);
         const wallpaper::ShaderInputs in = inputs_.bind(device_.device(), ctx, &canvas, canvas.layout(), f);
         program_.dispatch(ctx, canvas, f, in);
+        // O clique foi entregue: os frames seguintes (e renderAllNow) já não o repetem.
+        if (auto it = mouseTracks_.find(&canvas); it != mouseTracks_.end()) it->second.clickPending = false;
     } else {
         canvas.clear(ctx);
     }
@@ -1316,6 +1383,13 @@ void App::renderAllNow() {
 void App::renderFrame() {
     const LONGLONG start = qpcNow();
     const double t = qpcToSeconds(start);
+    // Ordem das janelas do ambiente de trabalho: o Windows não gera nenhum evento quando o
+    // Explorer só muda a ordem Z (medido), por isso verificamos aqui, no máximo a cada 50 ms.
+    // Custa uns poucos GetWindow (microssegundos); um piscar dura no máximo isto.
+    if (!options_.windowed && t - lastOrderCheck_ >= 0.05) {
+        lastOrderCheck_ = t;
+        checkDesktopOrder();
+    }
     {
         // Engasgos: um frame que chegou bem depois do previsto.
         const double periodMs = 1000.0 / std::clamp(settings_.fps, 1, 240);
@@ -1355,7 +1429,19 @@ void App::renderFrame() {
             const Rect& r = s->monitor.rect;
             onCanvas = onCanvas || (p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom);
         }
-        MouseTrack& tr = mouseTracks_[cv.get()];
+        auto [trIt, created] = mouseTracks_.try_emplace(cv.get());
+        MouseTrack& tr = trIt->second;
+        if (created) tr.seenClick = mouse_.clickSerial; // canvas novo: cliques antigos não contam
+        if (tr.seenClick != mouse_.clickSerial) {
+            // Clique novo: justClicked() só no canvas onde ele aconteceu.
+            tr.seenClick = mouse_.clickSerial;
+            const POINT c = mouse_.clickPos;
+            for (const auto& s : surfaces_) {
+                if (s->canvas != cv.get()) continue;
+                const Rect& r = s->monitor.rect;
+                tr.clickPending = tr.clickPending || (c.x >= r.left && c.x < r.right && c.y >= r.top && c.y < r.bottom);
+            }
+        }
         tr.inside = onCanvas && mouse_.overDesktop;
         if (tr.inside) tr.last = p;
         const float target = tr.inside ? 1.0f : 0.0f;
@@ -1419,7 +1505,7 @@ std::unique_ptr<render::MonitorSurface> App::createSurface(const desktop::Monito
     if (!s->createWindow(instance_, false, controller_) || !workerw_.adopt(s->hwnd())) {
         return nullptr;
     }
-    workerw_.place(s->hwnd(), mon.rect);
+    workerw_.place(s->hwnd(), mon.rect, true); // estilo acabado de mudar em adopt()
     if (FAILED(s->createSwapChain(device_, mon.rect.width(), mon.rect.height()))) {
         return nullptr;
     }
@@ -1447,9 +1533,22 @@ bool App::attachDesktop() {
         return false;
     }
     // Primeiro frame ANTES de mostrar as janelas: é isto que evita o flash preto.
+    // Sem wallpaper nenhum ficam escondidas (o fundo do Windows continua à vista).
     rebuildCanvases();
     renderAllNow();
-    for (auto& s : surfaces_) s->show();
+    if (hasWallpaper_) {
+        for (auto& s : surfaces_) s->show();
+    }
+
+    // Vigiar os filhos da anfitriã no processo do Explorer: se ele criar ou mostrar uma janela
+    // por cima da nossa (troca de fundo, Spotlight), repomos a ordem logo no evento. Uma simples
+    // mudança de ordem Z não gera evento nenhum: essa é apanhada em renderFrame().
+    shellOrderHook_.reset();
+    if (const DWORD pid = workerw_.explorerProcessId()) {
+        shellOrderHook_.reset(SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_REORDER, nullptr, onShellWinEvent,
+                                              pid, 0, WINEVENT_OUTOFCONTEXT));
+    }
+    checkDesktopOrder();
     updatePause();
     return true;
 }
@@ -1509,11 +1608,17 @@ void App::syncLayout() {
     }
     const auto monitors = desktop::enumerateMonitors();
 
+    // O Windows manda WM_SETTINGCHANGE por tudo e por nada (Spotlight, tema, variáveis de
+    // ambiente, políticas...). Antes, cada um reposicionava as janelas (SWP_FRAMECHANGED) e
+    // refazia atlas, grelhas e canvas mesmo sem nada ter mudado. Agora só se mexe no que mudou.
+    bool changed = false;
+
     // 1) Remover superfícies de monitores que desapareceram.
     std::erase_if(surfaces_, [&](const auto& s) {
         const bool gone = std::none_of(monitors.begin(), monitors.end(),
                                        [&](const auto& m) { return m.device == s->monitor.device; });
         if (gone) log::info(L"Monitor {} desligado", s->monitor.device);
+        changed = changed || gone;
         return gone;
     });
 
@@ -1528,9 +1633,11 @@ void App::syncLayout() {
             if (auto s = createSurface(m, index)) {
                 fresh.push_back(s.get());
                 surfaces_.push_back(std::move(s));
+                changed = true;
             }
         } else {
             auto& s = **it;
+            const bool layoutChanged = !s.monitor.sameLayout(m) || s.index != index;
             if (!s.monitor.sameLayout(m)) {
                 log::info(L"Monitor {}: {}x{}@({},{}) {} DPI -> {}x{}@({},{}) {} DPI", m.device,
                           s.monitor.rect.width(), s.monitor.rect.height(), s.monitor.rect.left,
@@ -1539,24 +1646,81 @@ void App::syncLayout() {
             }
             s.monitor = m;
             s.index = index;
-            // Primeiro os buffers, depois atlas/grelha para o DPI novo, depois a janela.
-            const HRESULT hr = s.resize(device_, m.rect.width(), m.rect.height());
-            if (render::isDeviceLost(hr)) {
-                handleDeviceLost(hr);
-                return;
+            if (layoutChanged) {
+                // Primeiro os buffers, depois atlas/grelha para o DPI novo, depois a janela.
+                const HRESULT hr = s.resize(device_, m.rect.width(), m.rect.height());
+                if (render::isDeviceLost(hr)) {
+                    handleDeviceLost(hr);
+                    return;
+                }
+                prepareSurface(s);
+                changed = true;
             }
-            prepareSurface(s);
-            // A origem do WorkerW muda se aparecer um monitor à esquerda/acima, por isso
-            // reposicionamos sempre (é barato).
-            workerw_.place(s.hwnd(), m.rect);
+            // A origem do WorkerW muda se aparecer um monitor à esquerda/acima: reposicionar
+            // só se a janela não estiver já no sítio certo.
+            if (layoutChanged || !desktop::WorkerW::isPlaced(s.hwnd(), m.rect)) {
+                workerw_.place(s.hwnd(), m.rect);
+            }
         }
         ++index;
     }
-    // O canvas estendido depende de TODOS os monitores: refazer e desenhar um frame novo.
-    rebuildCanvases();
-    renderAllNow();
-    for (auto* s : fresh) s->show();
+    if (changed) {
+        // O canvas estendido depende de TODOS os monitores: refazer e desenhar um frame novo.
+        rebuildCanvases();
+        renderAllNow();
+        if (hasWallpaper_) {
+            for (auto* s : fresh) s->show();
+        }
+    }
+    checkDesktopOrder();
     updatePause();
+}
+
+void App::checkDesktopOrder() {
+    orderCheckPending_ = false;
+    if (options_.windowed || exiting_ || surfaces_.empty() || !workerw_.isValid()) {
+        return;
+    }
+    // Se o Explorer insistir em reordenar (luta entre nós e ele), não entrar num ciclo:
+    // no máximo 40 correções por cada 10 s.
+    const double t = now();
+    if (t - orderFixWindowStart_ > 10.0) {
+        orderFixWindowStart_ = t;
+        orderFixes_ = 0;
+    }
+    if (orderFixes_ >= 40) {
+        return;
+    }
+    std::vector<HWND> ours;
+    for (const auto& s : surfaces_) {
+        if (s->hwnd()) ours.push_back(s->hwnd());
+    }
+    const std::wstring intruder = workerw_.enforceOrder(ours);
+    if (intruder.empty()) {
+        return;
+    }
+    ++orderFixes_;
+    if (orderFixes_ <= 5) {
+        log::info(L"Ordem das janelas reposta: {} estava por cima do wallpaper", intruder);
+    } else if (orderFixes_ == 40) {
+        log::warn(L"O Explorer reordenou o ambiente de trabalho 40 vezes em 10 s; a parar de corrigir por agora");
+    }
+}
+
+void CALLBACK App::onShellWinEvent(HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject, LONG idChild, DWORD, DWORD) {
+    if (!g_app || g_app->exiting_ || idObject != OBJID_WINDOW || idChild != CHILDID_SELF || !hwnd) {
+        return;
+    }
+    const HWND host = g_app->workerw_.host();
+    if (!host || (hwnd != host && GetAncestor(hwnd, GA_PARENT) != host)) {
+        return;
+    }
+    // Um filho da anfitriã apareceu, mudou de ordem ou desapareceu: verificar a ordem Z já
+    // (no próximo ciclo de mensagens, juntando rajadas numa só verificação).
+    if (!g_app->orderCheckPending_) {
+        g_app->orderCheckPending_ = true;
+        PostMessageW(g_app->controller_, WM_APP_CHECK_ORDER, 0, 0);
+    }
 }
 
 void App::scheduleReattach(UINT delayMs) {
@@ -1746,6 +1910,10 @@ LRESULT CALLBACK App::controllerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
 }
 
 LRESULT App::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
+    if (openLauncherMsg_ != 0 && msg == openLauncherMsg_) {
+        if (!exiting_) openLauncher();
+        return 0;
+    }
     if (taskbarCreated_ != 0 && msg == taskbarCreated_) {
         log::info(L"Explorer (re)iniciado: a voltar a ligar");
         tray_.readd();
@@ -1774,13 +1942,18 @@ LRESULT App::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
         loadingPath_.clear();
         if (!queuedLoad_.empty()) {
             const fs::path next = std::exchange(queuedLoad_, {});
-            if (!samePath(next, wallpaperPath_)) loadWallpaperAsync(next);
+            const bool force = std::exchange(queuedForce_, false);
+            // Um "Aplicar" repetido do que acabou de carregar não recompila; um hot reload sim.
+            if (force || !samePath(next, wallpaperPath_)) loadWallpaperAsync(next, force);
         }
         if (launcher_ && launcher_->isVisible()) launcher_->invalidate();
         if (flyout_ && flyout_->isVisible()) flyout_->invalidate();
         return 0;
     case WM_APP_MODAL_FRAME:
         onModalFrame();
+        return 0;
+    case WM_APP_CHECK_ORDER:
+        checkDesktopOrder();
         return 0;
 
     case render::WM_APP_SURFACE_LOST:
@@ -1905,6 +2078,7 @@ void App::onTimer(UINT_PTR id) {
         syncLayout();
         break;
     case TIMER_PAUSE_CHECK:
+        checkDesktopOrder(); // rede de segurança se algum evento do Explorer nos escapar
         updatePause();
         break;
     case TIMER_PAUSE_DEBOUNCE:
@@ -1931,7 +2105,7 @@ void App::onTimer(UINT_PTR id) {
     case TIMER_HOT_RELOAD:
         KillTimer(controller_, id);
         log::info(L"Alterações em {}: a recarregar", wallpaper_.watchDir.wstring());
-        loadWallpaperAsync(wallpaperPath_);
+        loadWallpaperAsync(wallpaperPath_, true);
         break;
     case TIMER_BENCH:
         finishBench();

@@ -15,6 +15,7 @@ namespace ap::render {
 struct CompiledShader {
     Microsoft::WRL::ComPtr<ID3DBlob> blob;
     std::string errors; // mensagens do compilador (erros e avisos), já sem caminhos absolutos
+    std::wstring cacheFile; // não vazio = veio da cache no disco (apagar se o driver o recusar)
     bool ok() const { return blob != nullptr; }
 };
 

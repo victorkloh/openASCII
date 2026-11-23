@@ -59,7 +59,16 @@ int WINAPI wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ PWSTR, _In_ int) {
     if (!opts.windowed) {
         mutex.reset(CreateMutexW(nullptr, FALSE, L"Local\\AsciiPaper.SingleInstance"));
         if (GetLastError() == ERROR_ALREADY_EXISTS) {
-            ap::log::info(L"Já existe uma instância a correr; a sair");
+            // Abrir a app outra vez (atalho do Menu Iniciar, com ela já a correr desde o
+            // arranque do Windows) mostra o launcher da instância que já existe, em vez de
+            // não fazer nada visível.
+            if (HWND running = FindWindowW(L"AsciiPaperController", nullptr)) {
+                DWORD pid = 0;
+                GetWindowThreadProcessId(running, &pid);
+                AllowSetForegroundWindow(pid); // somos nós que temos o foco: passá-lo à outra
+                PostMessageW(running, RegisterWindowMessageW(ap::app::kOpenLauncherMessage), 0, 0);
+            }
+            ap::log::info(L"Já existe uma instância a correr; a pedir-lhe que abra o launcher");
             return 0;
         }
     }

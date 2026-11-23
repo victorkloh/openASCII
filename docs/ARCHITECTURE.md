@@ -104,13 +104,21 @@ WorkerW: estratégia = 24H2+ (WorkerW filho do Progman); anfitriã 0x…(Progman
 
 `ChangeWindowMessageFilterEx` deixa passar `TaskbarCreated` mesmo que a app corra elevada.
 
+### O Explorer põe o fundo do Windows por cima do nosso
+No layout 24H2+, o `WorkerW` que pinta o fundo estático é **irmão** das nossas janelas (todos filhos do `Progman`). Quando troca o fundo (o **Windows Spotlight** fá-lo sozinho), o Explorer reordena os filhos e o `WorkerW` pode ficar por cima de nós: o fundo do Windows aparecia até à passagem de layout seguinte (até ~1,5 s). Uma simples mudança de ordem Z **não gera nenhum WinEvent** (medido com `SetWinEventHook`), por isso:
+- `WorkerW::enforceOrder()` percorre os filhos do anfitrião (meia dúzia de `GetWindow`) e, se houver uma janela visível entre os ícones e as nossas, repõe-nos logo abaixo dos ícones e o `WorkerW` no fundo;
+- `renderFrame()` chama-a no máximo a cada 50 ms; o timer de pausas (1 Hz) e um hook de `EVENT_OBJECT_CREATE/SHOW` no processo do Explorer cobrem o resto;
+- no máximo 40 correções por cada 10 s, para nunca entrar numa luta com o Explorer.
+
+Medido (forçando o `WorkerW` por cima): reposto em 16–47 ms. O log regista cada correção ("Ordem das janelas reposta") e o que estava por cima.
+
 ## 6. Monitores, DPI e coordenadas
 
 - **Uma janela por monitor**, cada uma com a sua swapchain do tamanho exato do monitor. Isto permite DPIs diferentes por monitor e pausar um monitor sem afetar os outros.
 - **Coordenadas**: os monitores vêm em coordenadas de **ecrã virtual**, que podem ser negativas (monitor à esquerda/acima do principal). As nossas janelas são filhas, logo posicionam-se nas coordenadas **cliente** do anfitrião. Usamos `ClientToScreen(host, {0,0})` para obter a origem do anfitrião e subtraímos (`toParentSpace`). Na prática é igual a subtrair `SM_XVIRTUALSCREEN/SM_YVIRTUALSCREEN` (o log mostra os dois), mas não depende de o anfitrião cobrir exatamente o ecrã virtual.
 - **DPI**: o manifesto declara **PerMonitorV2**, por isso trabalhamos sempre em píxeis físicos. As janelas **filhas não recebem `WM_DPICHANGED`**, por isso reagimos a `WM_DISPLAYCHANGE`, `WM_SETTINGCHANGE`, `WM_DEVICECHANGE (DBT_DEVNODES_CHANGED)` e relemos `GetDpiForMonitor` em cada monitor.
 - **Debounce + passagem tardia**: estas mensagens chegam em rajada. Esperamos 250 ms e sincronizamos; e voltamos a sincronizar aos 1500 ms, porque o Explorer redimensiona o seu `WorkerW`/`Progman` ao seu ritmo e pode fazê-lo depois de nós.
-- **Sincronizar** = remover superfícies de monitores desligados, criar as de monitores novos e, para as restantes: `ResizeBuffers` → reposicionar janela → **desenhar logo um frame** no tamanho novo. Os monitores são identificados pelo nome do dispositivo (`\\.\DISPLAY1`).
+- **Sincronizar** = remover superfícies de monitores desligados, criar as de monitores novos e, para as restantes **cujo tamanho, DPI ou posição mudou**: `ResizeBuffers` → reposicionar janela → **desenhar logo um frame** no tamanho novo. O `WM_SETTINGCHANGE` chega por tudo e por nada (tema, Spotlight, variáveis de ambiente...), por isso uma passagem sem mudanças não toca em nada. Os monitores são identificados pelo nome do dispositivo (`\\.\DISPLAY1`).
 - Na Fase 1 cada monitor mostra uma cor animada com **moldura de 6 px lógicos** e um **quadrado central de 48 px lógicos**: se a moldura aparecer cortada ou o quadrado mudar de tamanho aparente ao mudar a escala, há um bug de layout/DPI.
 
 ## 7. Render

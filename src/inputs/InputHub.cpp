@@ -254,8 +254,14 @@ void InputHub::configure(const Manifest& m, const fs::path& dir, const InputSett
     }
     if (spec != sourceSpec_) {
         sourceSpec_ = spec;
-        if (spec.empty()) source_.close();
-        else if (!source_.open(spec, wic)) log::warn(L"[inputs] source: não consegui abrir \"{}\"", spec);
+        if (spec.empty()) {
+            source_.close();
+        } else if (!source_.open(spec, wic)) {
+            log::warn(L"[inputs] source: não consegui abrir \"{}\"", spec);
+            // Esquecer: a próxima configuração (recarregar, mudar ajustes) tenta outra vez,
+            // em vez de ficar para sempre sem imagem por o ficheiro ter falhado uma vez.
+            sourceSpec_.clear();
+        }
     }
 
     loadText(m.text, dir, m.textInterval);

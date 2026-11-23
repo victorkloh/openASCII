@@ -44,9 +44,13 @@ public:
 
 private:
     enum class Kind { None, Image, Gif, Video, Webcam };
+    enum class SessionEnd { Done, Failed, Paused }; // como acabou uma sessão do Media Foundation
     bool openImage(const std::wstring& path, IWICImagingFactory* wic);
     bool openMedia(const std::wstring& pathOrWebcam);
     void mediaThread(std::wstring pathOrWebcam);
+    // Abre o vídeo/webcam e lê frames até parar. A webcam é desligada ao sair (pausa longa,
+    // falha); o thread decide se volta a abrir.
+    SessionEnd runMediaSession(const std::wstring& spec, bool& warned);
 
     Kind kind_ = Kind::None;
     std::wstring spec_;

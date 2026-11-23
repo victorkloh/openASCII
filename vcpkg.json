@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "asciipaper",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Motor de wallpapers ASCII reativos para Windows",
   "builtin-baseline": "3c8fa990c006f2def52cccf7f7c7e9f3bcff0333",
   "dependencies": [

@@ -89,6 +89,30 @@ Legenda: ✅ feito e verificado · 🟡 feito, falta verificação manual ou tem
 - ✅ Neve: vento sem saltos; parâmetros com efeito imediato (os teus ajustes ritmo 0 / altura 1 / derreter 0 só travavam o futuro).
 - ✅ Webcam e cidade na página do wallpaper; efeitos de ecrã em qualquer wallpaper; pesquisa e grupos por tipo.
 
+## 17. "/code-review" (xhigh) e "corrigir"
+- ✅ 15 achados, todos corrigidos: cliques (`justClicked`), cache de shaders estragada, GIF fora do buffer, hot reload perdido, webcam (interruptor, pausa, ocupada), `fixedStep` ao fim de dias, perguntas em fila, neve com muitos obstáculos, tempo real sem rede, áudio ao trocar de saída, Arcade, menu em ecrãs baixos, fonte que falhou.
+- 🟡 Não testados à mão: troca real de saída de áudio, webcam, falta de rede.
+
+## 18. "O wallpaper pisca e mostra o do Windows de vez em quando"
+- ✅ Causa provável: o Windows Spotlight (fundo do Windows aqui). Ao trocar a imagem, o Explorer põe o `WorkerW` dele por cima do nosso, e a app só se repunha na passagem de layout seguinte (até ~1,5 s).
+- ✅ A ordem é verificada a cada frame (≤ 50 ms) e reposta. Medido, forçando o `WorkerW` por cima: 16–47 ms. O `WM_SETTINGCHANGE` deixou de mexer nas janelas sem necessidade.
+- 🟡 Não apanhei um caso real (nenhum em ~3,5 h de monitorização). Sugestão: fundo do Windows em "Imagem" ou "Cor sólida".
+
+## 19. "Prepara os ficheiros para a primeira release" + "o instalador pergunta se instala os wallpapers predefinidos"
+- ✅ Instalador Inno Setup (`installer/AsciiPaper.iss`): por utilizador, sem admin, componentes "app" e "wallpapers predefinidos" (opcional), "Iniciar com o Windows", atalho que abre o launcher, fecha a app antes de atualizar/desinstalar, pergunta antes de apagar os dados do utilizador.
+- ✅ App sem wallpapers: fica na bandeja sem tapar o fundo do Windows; launcher e menu convidam a criar o primeiro.
+- ✅ Abrir a app outra vez mostra o launcher da instância que já corre.
+- ✅ Media Foundation carregado só quando preciso (as edições N do Windows não o têm).
+- ✅ `scripts/package.ps1` (zip portátil + instalador + `SHA256SUMS.txt`), workflows `ci.yml` e `release.yml` (tag → rascunho de release), notas em `docs/releases/v0.5.0.md`.
+- ✅ Instalador compilado (Inno Setup 6.7.3) e testado nesta máquina: "só a app" (sem wallpapers, sem arranque automático), "completa" com arranque automático, e desinstalação com a app aberta (fecha-a, repõe o fundo, remove ficheiros, atalho e arranque, mantém as definições).
+- 🟡 Testado em modo silencioso; as páginas do assistente (componentes, tarefas) não foram vistas no ecrã.
+- ⏳ Publicar: falta o repositório no GitHub.
+
+## 20. "Os conjuntos de caracteres não se aplicam a tudo (peixes do aquário, barras)"
+- ✅ Causa: o conjunto só mudava a rampa; os sprites (`glyph(k)`) e o texto (`asciiGlyph`) usavam sempre os seus caracteres.
+- ✅ `charset_only` ("Usar só estes caracteres"), ligado ao escolher um conjunto: cada sprite/caractere de texto passa a usar o caractere do conjunto mais parecido na forma (grelha 3x3) e na densidade. Os conjuntos aparecem também nos wallpapers que só usam caracteres próprios. As mensagens de erro ficam legíveis (cópias intactas no atlas). Os ajustes antigos com um conjunto escolhido passam a usá-lo em tudo.
+- ✅ Verificado fora do ecrã: aquário (binário, blocos, braille, caixas), relógio, neve, terminal, matrix e um wallpaper com erro.
+
 ## O que fica para depois (da spec original)
 - ⏳ Fase 4: backend Lua + natives (`fluid`, `particles`, `life`).
 - ⏳ Fase 5: wallpaper diferente por monitor; guia passo a passo no README já existe em `docs/CREATING_WALLPAPERS.md`.

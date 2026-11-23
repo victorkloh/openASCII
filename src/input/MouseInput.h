@@ -13,6 +13,8 @@
 
 #include <windows.h>
 
+#include <cstdint>
+
 namespace ap::input {
 
 enum class InteractionMode {
@@ -43,6 +45,7 @@ public:
     POINT clickPos{};
     unsigned clickButton = 0;
     LONGLONG clickQpc = 0; // 0 = nunca
+    uint32_t clickSerial = 0; // +1 por clique: cada canvas entrega cada clique uma vez (justClicked)
 
 private:
     bool acceptsAt(POINT pt) const;

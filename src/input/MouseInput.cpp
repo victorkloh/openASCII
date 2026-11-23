@@ -31,6 +31,7 @@ void MouseInput::update() {
             LARGE_INTEGER now;
             QueryPerformanceCounter(&now);
             clickQpc = now.QuadPart;
+            ++clickSerial;
         }
         if (!down) buttons &= ~bits[b];
         wasDown_[b] = down;

@@ -59,6 +59,10 @@ struct Manifest {
     int fontWeight = 400;
     std::u32string charset = U" .:-=+*#%@"; // rampa: value 0..1 escolhe daqui
     std::u32string glyphs;                  // caracteres extra (sprites), via glyph(k) no shader
+    // true = SÓ os caracteres do charset aparecem: os sprites (glyph(k)) e o texto (asciiGlyph)
+    // são trocados pelo caractere do charset com a densidade de tinta mais parecida. É o que o
+    // launcher liga quando escolhes um conjunto ("Usar só estes caracteres").
+    bool charsetOnly = false;
     int substeps = 1;                       // dispatches por frame (simulações rápidas: fluido, areia)
     // [inputs]: o que o wallpaper usa (só se lê/captura o que é pedido)
     bool useWindows = false; // janelas abertas como obstáculos
@@ -98,6 +102,7 @@ struct Theme {
     std::optional<float> scale;
     std::optional<int> fps;
     std::optional<std::u32string> charset;
+    std::optional<bool> charsetOnly; // charset_only
     std::optional<Rgba8> background;
     std::optional<std::vector<Rgba8>> palette;
     std::optional<std::string> source; // trocar a imagem/vídeo (ex.: a foto escolhida pelo utilizador)

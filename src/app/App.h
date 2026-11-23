@@ -41,6 +41,9 @@ class ConfirmDialog;
 
 namespace ap::app {
 
+// Mensagem registada que uma segunda instância envia à primeira para mostrar o launcher.
+inline constexpr wchar_t kOpenLauncherMessage[] = L"AsciiPaper.OpenLauncher";
+
 struct Settings {
     int fps = 30;    // vem do wallpaper.toml
     int maxFps = 60; // limite global (config.toml)
@@ -111,7 +114,7 @@ private:
 
     // Wallpaper
     void loadWallpaperSync(const std::filesystem::path& path);
-    void loadWallpaperAsync(const std::filesystem::path& path);
+    void loadWallpaperAsync(const std::filesystem::path& path, bool force = false); // force: hot reload
     void applyLoadJob(LoadJob job);
     void onManifestChanged(); // fps, atlas, canvas
     void configureInputs();   // [inputs] do wallpaper ativo: janelas, áudio, imagem, texto...
@@ -134,6 +137,8 @@ private:
     void syncLayout();
     void scheduleLayout();
     void scheduleReattach(UINT delayMs);
+    void checkDesktopOrder(); // repõe as nossas janelas por cima do fundo do Windows
+    static void CALLBACK onShellWinEvent(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD);
 
     // Render
     HRESULT prepareSurface(render::MonitorSurface& s); // atlas + grelha para o DPI e wallpaper atuais
@@ -170,6 +175,7 @@ private:
     HINSTANCE instance_ = nullptr;
     HWND controller_ = nullptr;
     UINT taskbarCreated_ = 0;
+    UINT openLauncherMsg_ = 0; // kOpenLauncherMessage
     bool exiting_ = false;
 
     desktop::WorkerW workerw_;
@@ -188,6 +194,7 @@ private:
     std::unique_ptr<ui::ConfirmDialog> dialog_;
     std::vector<desktop::OtherWallpaperApp> suspendedApps_; // o que pausámos (para retomar)
     bool quitting_ = false;
+    bool otherAppsChecked_ = false; // Wallpaper Engine/Lively: verificado uma vez, com um wallpaper à vista
     int modalLoops_ = 0;          // janelas nossas em loop modal (arrastar/redimensionar)
     PTP_WAIT modalWait_ = nullptr; // durante um loop modal: espera pelo timer de frames
     bool autostartCached_ = false; // lido do registo só ao arrancar e ao mudar
@@ -202,6 +209,7 @@ private:
     std::future<LoadJob> pendingLoad_;
     std::filesystem::path loadingPath_; // a compilar agora (vazio = nada)
     std::filesystem::path queuedLoad_;  // pedido feito durante uma compilação (o mais recente)
+    bool queuedForce_ = false;          // o pedido em fila é um hot reload (corre mesmo se for o atual)
     std::vector<std::wstring> fontCache_;
     inputs::InputHub inputs_;
     bool webcamAllowedSession_ = false; // "Ligar a webcam" sem "lembrar": só até fechar a app
@@ -221,11 +229,17 @@ private:
         float presence = 0.0f;
         POINT last{};
         bool inside = false;
-        uint32_t seenClick = 0; // último clique já entregue a este canvas
+        uint32_t seenClick = 0;    // último clique (MouseInput::clickSerial) já visto por este canvas
+        bool clickPending = false; // clique novo dentro deste canvas, ainda não entregue ao shader
     };
     std::unordered_map<const render::CellCanvas*, MouseTrack> mouseTracks_;
 
     std::vector<WinEventHook> winEventHooks_;
+    WinEventHook shellOrderHook_;     // filhos da anfitriã, no processo do Explorer
+    bool orderCheckPending_ = false;  // WM_APP_CHECK_ORDER já está na fila
+    double orderFixWindowStart_ = 0.0;
+    double lastOrderCheck_ = -1.0;    // renderFrame verifica a ordem Z no máximo a cada 50 ms
+    int orderFixes_ = 0;              // correções da ordem Z na janela de 10 s atual
     PowerNotify batterySaverNotify_;
     bool sessionNotify_ = false;
     int reattachAttempts_ = 0;

@@ -13,3 +13,8 @@ indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
+
+# O Inno Setup só lê UTF-8 com BOM (sem ele, os acentos saem estragados).
+[*.iss]
+charset = utf-8-bom
+end_of_line = crlf

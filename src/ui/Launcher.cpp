@@ -300,7 +300,10 @@ void Launcher::buildSidebar(Ui& ui, float h) {
     const float off = ui.scrollArea(makeId(L"side-scroll"), listArea, contentH);
     ui.pushClip(listArea);
     float ry = y - off;
-    if (rows.empty()) ui.text(rect(x, y + 6, w, 20), L"Nada encontrado.", t.faint, smallText(12.5f));
+    if (rows.empty()) {
+        ui.text(rect(x, y + 6, w, 20), items_.empty() ? L"Ainda não há wallpapers." : L"Nada encontrado.", t.faint,
+                smallText(12.5f));
+    }
     for (const Row& r : rows) {
         if (r.item == SIZE_MAX) {
             ui.text(rect(x, ry + 8, w, 18), L"// " + lower(kGroups[r.group]), t.faint, eyebrow());
@@ -352,6 +355,32 @@ void Launcher::buildSidebar(Ui& ui, float h) {
 
 float Launcher::buildWallpaperPage(Ui& ui, float x, float y, float w) {
     const Tokens& t = ui.theme();
+    if (items_.empty()) {
+        // Instalado sem os wallpapers predefinidos (ou apagaste-os todos): convidar a criar.
+        ui.text(rect(x, y, w, 32), L"Ainda não tens wallpapers", t.text, heading(22));
+        TextStyle body = smallText(13);
+        body.wrap = true;
+        body.valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+        ui.text(rect(x, y + 44, std::min(w, 560.0f), 80),
+                L"Enquanto não houver nenhum, o fundo do Windows continua à vista. Cria o primeiro a partir de um "
+                L"modelo em branco: o código abre no teu editor e cada gravação aparece logo no ambiente de trabalho.",
+                t.muted, body);
+        y += 132;
+        if (ui.button(makeId(L"empty-new"), rect(x, y, 220, 36), L"Criar o primeiro wallpaper", ButtonKind::Primary,
+                      L'\xE710')) {
+            page_ = Page::New;
+            newError_.clear();
+        }
+        y += 60;
+        TextStyle hint = smallText(12);
+        hint.wrap = true;
+        hint.valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+        ui.text(rect(x, y, std::min(w, 560.0f), 40),
+                L"Queres os 28 wallpapers que vêm com a app? Volta a correr o instalador e escolhe "
+                L"\"Wallpapers predefinidos\".",
+                t.faint, hint);
+        return y + 48;
+    }
     if (!editor_.valid) {
         ui.text(rect(x, y, w, 24), L"Não foi possível ler este wallpaper.", t.text, heading(15));
         ui.text(rect(x, y + 30, w, 60), widen(editor_.error), t.danger, [] {
@@ -609,37 +638,47 @@ float Launcher::buildWallpaperPage(Ui& ui, float x, float y, float w) {
     }
 
     // ---- Caracteres ----
-    // Um charset de um só caractere quer dizer que o wallpaper desenha com os seus próprios
-    // caracteres (glyphs/sprites): aí os conjuntos não mudam nada e é melhor dizê-lo.
+    // O charset é a rampa (o.value escolhe daqui). Os desenhos próprios do wallpaper (sprites,
+    // setas, texto) não passam pela rampa: por isso escolher um conjunto liga também "Usar só
+    // estes caracteres", que os troca pelo caractere do conjunto com a tinta mais parecida.
+    // Antes, no aquário com "binário", os peixes continuavam com < > ° ~ e os conjuntos nem
+    // apareciam nos wallpapers que só desenham com caracteres próprios (charset de 1 caractere).
     const bool usesRamp = editor_.base.charset.size() > 1;
     y = section(ui, x, y + 10, w, L"caracteres",
                 usesRamp ? L"Do mais vazio ao mais cheio. Enter para aplicar."
-                         : L"Este wallpaper desenha com os seus próprios caracteres: os conjuntos não se aplicam.");
-    if (usesRamp) {
-        const bool charsetSubmit = ui.textField(makeId(L"charset"), rect(x, y, std::min(w, 360.0f), 32), charsetEdit_,
-                                                L" .:-=+*#%@");
-        y += 42;
-        float px = x;
-        for (size_t i = 0; i < std::size(kCharsets); ++i) {
-            const float cw = ui.textWidth(kCharsets[i].label, smallText(12.5f)) + 24;
-            if (px + cw > x + w) { // não cabe: próxima linha (antes ficavam escondidos)
-                px = x;
-                y += 36;
-            }
-            if (ui.chip(makeId(L"cs", static_cast<int>(i)), rect(px, y, cw, 28), kCharsets[i].label,
-                        m.charset == kCharsets[i].chars)) {
-                editor_.draft.charset = std::u32string(kCharsets[i].chars);
-                charsetEdit_ = toWide32(*editor_.draft.charset);
-                changed = true;
-            }
-            px += cw + 6;
+                         : L"Este wallpaper desenha com os seus próprios caracteres. Escolhe um conjunto para os trocar.");
+    const bool charsetSubmit = ui.textField(makeId(L"charset"), rect(x, y, std::min(w, 360.0f), 32), charsetEdit_,
+                                            L" .:-=+*#%@");
+    y += 42;
+    float chipX = x;
+    for (size_t i = 0; i < std::size(kCharsets); ++i) {
+        const float cw = ui.textWidth(kCharsets[i].label, smallText(12.5f)) + 24;
+        if (chipX + cw > x + w) { // não cabe: próxima linha (antes ficavam escondidos)
+            chipX = x;
+            y += 36;
         }
-        if (charsetSubmit && !charsetEdit_.empty()) {
-            editor_.draft.charset = std::u32string(charsetEdit_.begin(), charsetEdit_.end());
+        if (ui.chip(makeId(L"cs", static_cast<int>(i)), rect(chipX, y, cw, 28), kCharsets[i].label,
+                    m.charset == kCharsets[i].chars)) {
+            editor_.draft.charset = std::u32string(kCharsets[i].chars);
+            editor_.draft.charsetOnly = true;
+            charsetEdit_ = toWide32(*editor_.draft.charset);
             changed = true;
         }
-        y += 40;
+        chipX += cw + 6;
     }
+    if (charsetSubmit && !charsetEdit_.empty()) {
+        editor_.draft.charset = std::u32string(charsetEdit_.begin(), charsetEdit_.end());
+        editor_.draft.charsetOnly = true;
+        changed = true;
+    }
+    y += 40;
+    bool only = m.charsetOnly;
+    if (ui.toggle(makeId(L"charset-only"), rect(x - 12, y, std::min(w, 620.0f) + 12, 54), L"Usar só estes caracteres",
+                  L"Também nos desenhos do wallpaper: peixes, setas, texto...", only)) {
+        editor_.draft.charsetOnly = only;
+        changed = true;
+    }
+    y += 60;
 
     // ---- Parâmetros ----
     if (!m.params.empty()) {

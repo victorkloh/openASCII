@@ -76,8 +76,8 @@ private:
     // ocupa o thread que também desenha o wallpaper. Pinturas pedidas cedo demais esperam.
     LONGLONG lastPaintQpc_ = 0;
     bool paintDeferred_ = false;
-    int captionPressed_ = 0;
-    bool closingByUser_ = false; // o WM_CLOSE atual veio do X / Alt+F4 (e não de fora) // HTMINBUTTON/HTMAXBUTTON/HTCLOSE premido (à espera de largar)
+    int captionPressed_ = 0;     // HTMINBUTTON/HTMAXBUTTON/HTCLOSE premido (à espera de largar)
+    bool closingByUser_ = false; // o WM_CLOSE atual veio do X / Alt+F4 (e não de fora)
 };
 
 } // namespace ap::ui

@@ -50,6 +50,7 @@ private:
 
     std::thread thread_;
     std::atomic<bool> stop_{false};
+    std::atomic<bool> finished_{false}; // run() saiu sozinho (cidade não encontrada)
     std::mutex mutex_;
     WeatherNow data_;
     std::wstring city_;

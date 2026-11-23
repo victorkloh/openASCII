@@ -13,6 +13,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); 
 - **Launcher**: secção "entradas" por wallpaper (o que usa, "Escolher imagem ou vídeo", "Incluir na playlist"); Definições com cidade do tempo real, autorização da webcam e playlist (de N em N minutos, ordem aleatória).
 - **Webcam com autorização explícita** (pergunta antes de ligar; "lembrar" opcional).
 - `--screenshot-delay <s>`; o `--bench` já não pergunta pelo Wallpaper Engine.
+- **Instalador** (`AsciiPaper-<versão>-setup.exe`, Inno Setup): por utilizador e sem administrador. Pergunta se instala os **wallpapers predefinidos** (sem eles, a app instala-se vazia). Tem a opção **Iniciar com o Windows** e atalho no Menu Iniciar. Fecha a app antes de atualizar ou desinstalar, para o fundo original voltar. Na desinstalação, só apaga as tuas definições e wallpapers se disseres que sim. Continua a haver a versão portátil em zip.
+- **Sem wallpapers instalados**, a app fica na bandeja sem tapar o fundo do Windows, e o launcher e o menu convidam a criar o primeiro.
+- Abrir a app outra vez (o atalho, com ela já a correr desde o arranque) **mostra o launcher** da instância que já existe.
+- Releases automáticas no GitHub: uma tag `vX.Y.Z` compila, testa, gera o instalador e o zip e cria um rascunho da release.
 
 ### Alterado
 - **60 FPS por defeito** (antes: automático, a maioria a 30). As simulações que avançam por frame (fogo, ondas, neve, coral, vida, sandbox) usam `fixedStep()` e correm à mesma velocidade a qualquer FPS; configs antigas com `fps = 0` passam a 60.
@@ -20,11 +24,20 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); 
 - **Efeitos de ecrã em qualquer wallpaper** (launcher): Nenhum, CRT, Néon, Cinema ou à medida (brilho, linhas, curvatura, vinheta, aberração, grão).
 - **Pesquisa e grupos no launcher**: procurar por nome, tipo ou descrição; lista agrupada por `meta.category` (Paisagens, Ambiente, Retro, 3D e espaço, Simulações, Dados e média, Jogos; os teus primeiro).
 - Webcam e cidade do tempo real configuram-se na própria página do wallpaper que as usa.
-- Caracteres: os wallpapers que desenham com caracteres próprios dizem-no (os conjuntos não se aplicavam e pareciam não funcionar); os conjuntos que não cabiam numa linha já não ficam escondidos.
+- **Caracteres: "Usar só estes caracteres"** (`charset_only`), ligado ao escolher um conjunto. Antes, o conjunto só mudava a rampa: no aquário com "binário", os peixes continuavam com `< > ° ~`, e o texto e os sprites de todos os wallpapers ignoravam a escolha. Agora cada sprite e cada caractere de texto passa a ser desenhado com o caractere do conjunto mais parecido na forma e na densidade (um `(` vira `│` com o conjunto de caixas). Os conjuntos também se aplicam aos wallpapers que só desenham com caracteres próprios (neve, fogo de artifício), as mensagens de erro continuam legíveis e os conjuntos que não cabiam numa linha já não ficam escondidos.
 - `fractal` sem interação com o rato (o modo Julia confundia).
 - **Menu da bandeja mais compacto**: com 28 wallpapers saía do ecrã (2011 DIP de altura). Agora a grelha tem 3 colunas e scroll (no máximo ~3,5 linhas, com sombra nas bordas), a altura adapta-se sempre à área de trabalho, abre com o wallpaper em uso à vista, os ajustes rápidos ficam recolhidos, a pausa é um ícone no cabeçalho e há navegação por teclado (setas, Enter, Esc). Altura típica: ~490 DIP.
 
+- Entradas mais robustas:
+  - o áudio segue a troca de saída (colunas ↔ auscultadores);
+  - o tempo real volta a tentar quando não há rede (ex.: no arranque, antes do Wi-Fi ligar);
+  - a webcam desliga-se ao fim de 3 s em pausa e quando desligas o interruptor, e volta a tentar se estiver ocupada;
+  - as simulações com `fixedStep()` aguentam dias seguidos ligadas (antes congelavam ao fim de ~4 dias);
+  - a neve consulta as janelas e os ícones uma vez por célula, em vez de ~20.
+
 ### Corrigido
+- **O fundo do Windows aparecia por instantes por cima do wallpaper** (sobretudo com o Windows Spotlight, que troca o fundo sozinho). Quando troca o fundo, o Explorer reordena as janelas do ambiente de trabalho e a dele ficava por cima da nossa até à passagem de layout seguinte (até ~1,5 s). Agora a ordem é verificada a cada frame (no máximo a cada 50 ms) e reposta logo: medido, 16–47 ms.
+- Cada `WM_SETTINGCHANGE` do Windows (são frequentes) reposicionava as janelas do wallpaper e refazia atlas, grelhas e canvas, mesmo sem nada ter mudado. Agora só se mexe no que mudou.
 - **Quebra de FPS com o rato sobre o launcher e ao trocar de wallpaper**: o ciclo de mensagens ficava preso a alternar entre movimento do rato e pintura e nunca atendia o timer dos frames; o fundo passa a desenhar à hora certa entre mensagens.
 - O fundo congelava enquanto se arrastava ou redimensionava o launcher, num menu ou num diálogo (medido: até 1,3 s); durante loops modais, um thread do threadpool espera pelo timer de alta resolução e o fundo continua a 30/60 fps.
 - Os botões minimizar/maximizar/fechar já não congelam o fundo (~100 ms por clique).
@@ -33,6 +46,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); 
 - Neve: mexer o rato fazia os flocos todos "acelerarem" (o vento multiplicava o tempo); agora a deriva é o integral do vento e o rato só afasta os flocos à sua volta. Baixar a altura máxima apara logo as pilhas e a intensidade nota-se no ar.
 - Escolher outra imagem/vídeo (ou outro texto) num ajuste já reconfigura as entradas ao vivo.
 - `--screenshot` sai com erro se o wallpaper não carregar (em vez de ficar à espera).
+
 ## [0.4.0] — 2026-11-20
 
 ### Adicionado

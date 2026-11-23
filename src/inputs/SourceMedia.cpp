@@ -39,9 +39,21 @@ UINT metaUint(IWICMetadataQueryReader* q, const wchar_t* name, UINT fallback) {
     return out;
 }
 
-// Media Foundation tem de ser inicializado uma vez por processo.
+// Media Foundation tem de ser inicializado uma vez por processo. As DLLs são de carregamento
+// diferido (/DELAYLOAD): nas edições "N" do Windows sem o Media Feature Pack não existem, e
+// chamar qualquer função MF sem elas rebentava. Por isso confirmamos primeiro que estão lá.
 bool ensureMediaFoundation() {
-    static const bool ok = SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
+    static const bool ok = [] {
+        for (const wchar_t* dll : {L"mfplat.dll", L"mfreadwrite.dll", L"mf.dll"}) {
+            if (!LoadLibraryExW(dll, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)) {
+                log::warn(L"Media Foundation indisponível ({} não existe; Windows N sem o Media Feature Pack?): "
+                          L"sem vídeo nem webcam",
+                          dll);
+                return false;
+            }
+        }
+        return SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
+    }();
     return ok;
 }
 
@@ -140,9 +152,12 @@ bool SourceMedia::openImage(const std::wstring& path, IWICImagingFactory* wic) {
         }
         frames_.push_back(canvas);
         delays_.push_back(std::max(0.02, delay / 100.0));
-        if (disposal == 2) { // limpar a zona do frame para o fundo
+        if (disposal == 2 && left < W) { // limpar a zona do frame para o fundo
+            // left < W: um frame deslocado para fora do "ecrã" do GIF não tem nada a limpar
+            // (e W - left daria a volta, escrevendo fora do buffer).
+            const size_t span = static_cast<size_t>(std::min(fw, W - left)) * 4;
             for (UINT y = 0; y < fh && top + y < H; ++y)
-                std::memset(&canvas[(static_cast<size_t>(top + y) * W + left) * 4], 0, std::min(fw, W - left) * 4);
+                std::memset(&canvas[(static_cast<size_t>(top + y) * W + left) * 4], 0, span);
         } else if (disposal == 3) { // voltar ao que estava antes deste frame
             canvas = std::move(before);
         }
@@ -166,121 +181,165 @@ bool SourceMedia::openMedia(const std::wstring& pathOrWebcam) {
 void SourceMedia::mediaThread(std::wstring spec) {
     // O thread tem o seu próprio COM (MTA): o Media Foundation trabalha assim.
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    {
-        ComPtr<IMFAttributes> attr;
-        MFCreateAttributes(&attr, 3);
-        // Processamento de vídeo avançado: converte para RGB32 e redimensiona por nós.
-        attr->SetUINT32(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, TRUE);
-        ComPtr<IMFSourceReader> reader;
-        HRESULT hr = E_FAIL;
-        if (kind_ == Kind::Webcam) {
-            ComPtr<IMFAttributes> devAttr;
-            MFCreateAttributes(&devAttr, 1);
-            devAttr->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-            IMFActivate** devices = nullptr;
-            UINT32 n = 0;
-            if (SUCCEEDED(MFEnumDeviceSources(devAttr.Get(), &devices, &n)) && n > 0) {
-                ComPtr<IMFMediaSource> source;
-                if (SUCCEEDED(devices[0]->ActivateObject(IID_PPV_ARGS(&source)))) {
-                    hr = MFCreateSourceReaderFromMediaSource(source.Get(), attr.Get(), &reader);
-                }
-            }
-            for (UINT32 i = 0; i < n; ++i) devices[i]->Release();
-            CoTaskMemFree(devices);
-        } else {
-            hr = MFCreateSourceReaderFromURL(spec.c_str(), attr.Get(), &reader);
+    const bool webcam = kind_ == Kind::Webcam;
+    bool warned = false;
+    while (!stop_) {
+        const SessionEnd end = runMediaSession(spec, warned);
+        if (end == SessionEnd::Done || !webcam) break; // vídeo: uma falha é definitiva (ficheiro)
+        if (end == SessionEnd::Paused) {
+            // A câmara fica DESLIGADA (luz apagada) enquanto o wallpaper estiver em pausa.
+            log::info(L"Webcam desligada enquanto o wallpaper está em pausa");
+            while (!stop_ && paused_) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue; // voltar a abrir
         }
-        if (FAILED(hr) || !reader) {
-            log::warn(L"Media Foundation não abriu \"{}\": {}", spec, win::hrToString(hr));
-        } else {
-            reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE);
-            reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), TRUE);
-            // Pedir RGB32 num tamanho modesto (até 640 de largura): chega para células de texto.
-            ComPtr<IMFMediaType> native;
-            UINT32 nw = 640, nh = 360;
-            if (SUCCEEDED(reader->GetNativeMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), 0, &native))) {
-                MFGetAttributeSize(native.Get(), MF_MT_FRAME_SIZE, &nw, &nh);
-            }
-            const UINT32 tw = std::min<UINT32>(nw, 640);
-            const UINT32 th = std::max<UINT32>(1, static_cast<UINT32>(static_cast<double>(nh) * tw / std::max<UINT32>(nw, 1)) & ~1u);
-            ComPtr<IMFMediaType> type;
-            MFCreateMediaType(&type);
-            type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-            type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
-            MFSetAttributeSize(type.Get(), MF_MT_FRAME_SIZE, tw, th);
-            hr = reader->SetCurrentMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, type.Get());
-            if (FAILED(hr)) { // sem redimensionar
-                type->DeleteItem(MF_MT_FRAME_SIZE);
-                hr = reader->SetCurrentMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, type.Get());
-            }
-            UINT32 w = 0, h = 0;
-            ComPtr<IMFMediaType> current;
-            if (SUCCEEDED(hr) && SUCCEEDED(reader->GetCurrentMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), &current))) {
-                MFGetAttributeSize(current.Get(), MF_MT_FRAME_SIZE, &w, &h);
-            }
-            if (FAILED(hr) || w == 0 || h == 0) {
-                log::warn(L"\"{}\": formato de vídeo não suportado ({})", spec, win::hrToString(hr));
-            } else {
-                log::info(L"Fonte de {}: {} ({}x{})", kind_ == Kind::Webcam ? L"webcam" : L"vídeo", spec, w, h);
-                const auto start = std::chrono::steady_clock::now();
-                LONGLONG firstTs = -1;
-                auto playStart = start;
-                while (!stop_) {
-                    if (paused_) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                        playStart = std::chrono::steady_clock::now();
-                        firstTs = -1;
-                        continue;
-                    }
-                    DWORD flags = 0;
-                    LONGLONG ts = 0;
-                    ComPtr<IMFSample> sample;
-                    hr = reader->ReadSample(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), 0, nullptr, &flags,
-                                            &ts, &sample);
-                    if (FAILED(hr)) break;
-                    if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
-                        if (kind_ != Kind::Video) break;
-                        PROPVARIANT pos;
-                        InitPropVariantFromInt64(0, &pos); // voltar ao início (vídeo em ciclo)
-                        reader->SetCurrentPosition(GUID_NULL, pos);
-                        PropVariantClear(&pos);
-                        firstTs = -1;
-                        playStart = std::chrono::steady_clock::now();
-                        continue;
-                    }
-                    if (!sample) continue;
-                    // Vídeo: respeitar os tempos do ficheiro (a webcam já chega ao seu ritmo).
-                    if (kind_ == Kind::Video) {
-                        if (firstTs < 0) firstTs = ts;
-                        const auto due = playStart + std::chrono::microseconds((ts - firstTs) / 10);
-                        while (!stop_ && std::chrono::steady_clock::now() < due) {
-                            std::this_thread::sleep_for(std::min<std::chrono::steady_clock::duration>(
-                                due - std::chrono::steady_clock::now(), std::chrono::milliseconds(20)));
-                        }
-                    }
-                    ComPtr<IMFMediaBuffer> buffer;
-                    if (FAILED(sample->ConvertToContiguousBuffer(&buffer))) continue;
-                    BYTE* data = nullptr;
-                    DWORD len = 0;
-                    if (FAILED(buffer->Lock(&data, nullptr, &len))) continue;
-                    const size_t rowBytes = static_cast<size_t>(w) * 4;
-                    if (len >= rowBytes * h) {
-                        std::lock_guard lock(mutex_);
-                        latest_.resize(rowBytes * h);
-                        // RGB32 do MF vem com a linha de cima primeiro quando o stride é positivo
-                        // (o normal com o processador de vídeo). Copiar e forçar alpha opaco.
-                        std::memcpy(latest_.data(), data, rowBytes * h);
-                        for (size_t i = 3; i < latest_.size(); i += 4) latest_[i] = 255;
-                        latestW_ = w;
-                        latestH_ = h;
-                        fresh_ = true;
-                    }
-                    buffer->Unlock();
-                }
-            }
-        }
+        // Webcam ocupada por outra app, desligada...: tentar outra vez daqui a 5 s.
+        for (int i = 0; i < 50 && !stop_; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     CoUninitialize();
+}
+
+SourceMedia::SessionEnd SourceMedia::runMediaSession(const std::wstring& spec, bool& warned) {
+    const bool webcam = kind_ == Kind::Webcam;
+    ComPtr<IMFAttributes> attr;
+    MFCreateAttributes(&attr, 3);
+    // Processamento de vídeo avançado: converte para RGB32 e redimensiona por nós.
+    attr->SetUINT32(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, TRUE);
+    ComPtr<IMFSourceReader> reader;
+    ComPtr<IMFMediaSource> device;
+    HRESULT hr = E_FAIL;
+    if (webcam) {
+        ComPtr<IMFAttributes> devAttr;
+        MFCreateAttributes(&devAttr, 1);
+        devAttr->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
+        IMFActivate** devices = nullptr;
+        UINT32 n = 0;
+        if (SUCCEEDED(MFEnumDeviceSources(devAttr.Get(), &devices, &n)) && n > 0) {
+            if (SUCCEEDED(devices[0]->ActivateObject(IID_PPV_ARGS(&device)))) {
+                hr = MFCreateSourceReaderFromMediaSource(device.Get(), attr.Get(), &reader);
+            }
+        }
+        for (UINT32 i = 0; i < n; ++i) devices[i]->Release();
+        CoTaskMemFree(devices);
+    } else {
+        hr = MFCreateSourceReaderFromURL(spec.c_str(), attr.Get(), &reader);
+    }
+    // Ao sair (pausa, falha, fim), largar o leitor e desligar o dispositivo: é isto que apaga a
+    // luz da webcam.
+    struct Release {
+        ComPtr<IMFSourceReader>& reader;
+        ComPtr<IMFMediaSource>& device;
+        ~Release() {
+            reader.Reset();
+            if (device) device->Shutdown();
+        }
+    } release{reader, device};
+
+    if (FAILED(hr) || !reader) {
+        if (!warned) log::warn(L"Media Foundation não abriu \"{}\": {}", spec, win::hrToString(hr));
+        warned = true;
+        return SessionEnd::Failed;
+    }
+    reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE);
+    reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), TRUE);
+    // Pedir RGB32 num tamanho modesto (até 640 de largura): chega para células de texto.
+    ComPtr<IMFMediaType> native;
+    UINT32 nw = 640, nh = 360;
+    if (SUCCEEDED(reader->GetNativeMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), 0, &native))) {
+        MFGetAttributeSize(native.Get(), MF_MT_FRAME_SIZE, &nw, &nh);
+    }
+    const UINT32 tw = std::min<UINT32>(nw, 640);
+    const UINT32 th = std::max<UINT32>(1, static_cast<UINT32>(static_cast<double>(nh) * tw / std::max<UINT32>(nw, 1)) & ~1u);
+    ComPtr<IMFMediaType> type;
+    MFCreateMediaType(&type);
+    type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+    type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
+    MFSetAttributeSize(type.Get(), MF_MT_FRAME_SIZE, tw, th);
+    hr = reader->SetCurrentMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, type.Get());
+    if (FAILED(hr)) { // sem redimensionar
+        type->DeleteItem(MF_MT_FRAME_SIZE);
+        hr = reader->SetCurrentMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, type.Get());
+    }
+    UINT32 w = 0, h = 0;
+    ComPtr<IMFMediaType> current;
+    if (SUCCEEDED(hr) && SUCCEEDED(reader->GetCurrentMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), &current))) {
+        MFGetAttributeSize(current.Get(), MF_MT_FRAME_SIZE, &w, &h);
+    }
+    if (FAILED(hr) || w == 0 || h == 0) {
+        if (!warned) log::warn(L"\"{}\": formato de vídeo não suportado ({})", spec, win::hrToString(hr));
+        warned = true;
+        return webcam ? SessionEnd::Failed : SessionEnd::Done;
+    }
+    log::info(L"Fonte de {}: {} ({}x{})", webcam ? L"webcam" : L"vídeo", spec, w, h);
+    warned = false; // abriu: uma falha futura volta a aparecer no log
+    LONGLONG firstTs = -1;
+    auto playStart = std::chrono::steady_clock::now();
+    auto pausedSince = playStart;
+    bool wasPaused = false;
+    while (!stop_) {
+        if (paused_) {
+            const auto now = std::chrono::steady_clock::now();
+            if (!wasPaused) pausedSince = now;
+            wasPaused = true;
+            // Webcam: depois de 3 s em pausa, desligá-la (volta a ligar quando o fundo voltar).
+            if (webcam && now - pausedSince > std::chrono::seconds(3)) return SessionEnd::Paused;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            playStart = std::chrono::steady_clock::now();
+            firstTs = -1;
+            continue;
+        }
+        wasPaused = false;
+        DWORD flags = 0;
+        LONGLONG ts = 0;
+        ComPtr<IMFSample> sample;
+        hr = reader->ReadSample(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), 0, nullptr, &flags, &ts,
+                                &sample);
+        if (FAILED(hr)) {
+            if (!warned) log::warn(L"\"{}\": leitura falhou ({})", spec, win::hrToString(hr));
+            warned = true;
+            return webcam ? SessionEnd::Failed : SessionEnd::Done;
+        }
+        if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
+            if (!webcam && kind_ == Kind::Video) {
+                PROPVARIANT pos;
+                InitPropVariantFromInt64(0, &pos); // voltar ao início (vídeo em ciclo)
+                reader->SetCurrentPosition(GUID_NULL, pos);
+                PropVariantClear(&pos);
+                firstTs = -1;
+                playStart = std::chrono::steady_clock::now();
+                continue;
+            }
+            return webcam ? SessionEnd::Failed : SessionEnd::Done;
+        }
+        if (!sample) continue;
+        // Vídeo: respeitar os tempos do ficheiro (a webcam já chega ao seu ritmo).
+        if (!webcam) {
+            if (firstTs < 0) firstTs = ts;
+            const auto due = playStart + std::chrono::microseconds((ts - firstTs) / 10);
+            while (!stop_ && std::chrono::steady_clock::now() < due) {
+                std::this_thread::sleep_for(std::min<std::chrono::steady_clock::duration>(
+                    due - std::chrono::steady_clock::now(), std::chrono::milliseconds(20)));
+            }
+        }
+        ComPtr<IMFMediaBuffer> buffer;
+        if (FAILED(sample->ConvertToContiguousBuffer(&buffer))) continue;
+        BYTE* data = nullptr;
+        DWORD len = 0;
+        if (FAILED(buffer->Lock(&data, nullptr, &len))) continue;
+        const size_t rowBytes = static_cast<size_t>(w) * 4;
+        if (len >= rowBytes * h) {
+            std::lock_guard lock(mutex_);
+            latest_.resize(rowBytes * h);
+            // RGB32 do MF vem com a linha de cima primeiro quando o stride é positivo
+            // (o normal com o processador de vídeo). Copiar e forçar alpha opaco.
+            std::memcpy(latest_.data(), data, rowBytes * h);
+            for (size_t i = 3; i < latest_.size(); i += 4) latest_[i] = 255;
+            latestW_ = w;
+            latestH_ = h;
+            fresh_ = true;
+        }
+        buffer->Unlock();
+    }
+    return SessionEnd::Done;
 }
 
 void SourceMedia::releaseDeviceObjects() {

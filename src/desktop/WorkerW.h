@@ -4,6 +4,9 @@
 
 #include <windows.h>
 
+#include <string>
+#include <vector>
+
 #include "core/Geometry.h"
 
 namespace ap::desktop {
@@ -41,9 +44,22 @@ public:
     // Torna `child` (criada como WS_POPUP escondida) numa filha da anfitriã.
     bool adopt(HWND child) const;
     // Posiciona `child` em `screenRect` (coordenadas de ecrã) com a ordem Z correta.
-    void place(HWND child, const Rect& screenRect) const;
+    // `frameChanged` só é preciso na primeira vez, logo a seguir a adopt() mudar o estilo.
+    void place(HWND child, const Rect& screenRect, bool frameChanged = false) const;
+    // true se `child` já ocupa `screenRect` (evita mexer na janela sem necessidade).
+    static bool isPlaced(HWND child, const Rect& screenRect);
     // Origem da área cliente da anfitriã, em coordenadas de ecrã.
     Point hostOrigin() const;
+
+    // Layouts em que somos filhos do Progman (24H2+ e fallback): as nossas janelas têm de
+    // ficar logo abaixo dos ícones e por cima de tudo o resto, sobretudo do WorkerW que pinta
+    // o fundo estático do Windows. O Explorer reordena os filhos quando troca o fundo (ex.:
+    // Windows Spotlight), e o fundo do Windows aparecia por cima do nosso até à próxima
+    // passagem de layout. Corrige a ordem se for preciso e devolve o que estava por cima
+    // (para o log); vazio = estava tudo bem.
+    std::wstring enforceOrder(const std::vector<HWND>& ours) const;
+    // Processo do Explorer dono da anfitriã (para filtrar eventos de janela).
+    DWORD explorerProcessId() const;
 
 private:
     HWND progman_ = nullptr;

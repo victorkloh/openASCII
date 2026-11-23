@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <winhttp.h>
 
+#include <algorithm>
 #include <cmath>
 #include <format>
 #include <string_view>
@@ -32,6 +33,13 @@ std::string httpGet(const wchar_t* host, const std::wstring& path) {
                                          WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE));
     if (!request || !WinHttpSendRequest(request.get(), WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
         !WinHttpReceiveResponse(request.get(), nullptr)) {
+        return {};
+    }
+    // Só uma resposta 200 conta: um erro do servidor (5xx) é "sem resposta", não "cidade inexistente".
+    DWORD status = 0, size = sizeof(status);
+    if (!WinHttpQueryHeaders(request.get(), WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                             WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX) ||
+        status != 200) {
         return {};
     }
     std::string body;
@@ -112,8 +120,11 @@ void Weather::start(const std::wstring& city) {
         stop();
         return;
     }
-    if (thread_.joinable() && city == city_) return;
+    // A mesma cidade e o thread ainda a correr: nada a fazer. (Se o thread já acabou — cidade
+    // não encontrada —, recomeçar: o utilizador pode ter voltado a escrever a mesma cidade.)
+    if (thread_.joinable() && city == city_ && !finished_) return;
     stop();
+    finished_ = false;
     city_ = city;
     stop_ = false;
     thread_ = std::thread(&Weather::run, this, city);
@@ -131,16 +142,29 @@ WeatherNow Weather::now() {
 }
 
 void Weather::run(std::wstring city) {
-    // 1) Cidade -> coordenadas (uma vez).
+    auto sleepFor = [this](int seconds) {
+        for (int i = 0; i < seconds * 10 && !stop_; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    };
+    // 1) Cidade -> coordenadas (uma vez). Sem rede (ex.: a app arranca com o Windows antes do
+    // Wi-Fi ligar) tenta de novo com intervalos crescentes; antes desistia para a sessão toda.
     double lat = 0, lon = 0;
-    const std::string geo = httpGet(L"geocoding-api.open-meteo.com",
-                                    L"/v1/search?count=1&language=pt&format=json&name=" + urlEncode(city));
-    if (!jsonNumber(geo, "latitude", lat) || !jsonNumber(geo, "longitude", lon)) {
-        log::warn(L"Tempo real: cidade \"{}\" não encontrada", city);
-        return;
+    for (int wait = 15; !stop_; wait = std::min(wait * 2, 15 * 60)) {
+        const std::string geo = httpGet(L"geocoding-api.open-meteo.com",
+                                        L"/v1/search?count=1&language=pt&format=json&name=" + urlEncode(city));
+        if (jsonNumber(geo, "latitude", lat) && jsonNumber(geo, "longitude", lon)) break;
+        if (!geo.empty()) {
+            // O serviço respondeu mas não conhece a cidade: só muda se o utilizador a corrigir.
+            log::warn(L"Tempo real: cidade \"{}\" não encontrada", city);
+            finished_ = true;
+            return;
+        }
+        log::warn(L"Tempo real: sem resposta do Open-Meteo; nova tentativa daqui a {} s", wait);
+        sleepFor(wait);
     }
+    if (stop_) return;
     log::info(L"Tempo real: {} ({:.2f}, {:.2f})", city, lat, lon);
-    // 2) Tempo atual a cada 15 minutos.
+    // 2) Tempo atual a cada 15 minutos (ou mais cedo se a última tentativa falhou).
+    int retry = 30;
     while (!stop_) {
         const std::wstring path = std::format(
             L"/v1/forecast?latitude={:.4f}&longitude={:.4f}&current=temperature_2m,precipitation,cloud_cover,"
@@ -164,10 +188,13 @@ void Weather::run(std::wstring city) {
             data_.longitude = lon;
             log::info(L"Tempo real: {:.1f} °C, chuva {:.1f} mm, nuvens {:.0f}%, vento {:.1f} m/s, código {}", t, p, cc, ws,
                       static_cast<int>(code));
+            retry = 30;
+            sleepFor(15 * 60);
         } else {
-            log::warn(L"Tempo real: resposta inválida do Open-Meteo");
+            log::warn(L"Tempo real: resposta inválida ou sem rede; nova tentativa daqui a {} s", retry);
+            sleepFor(retry);
+            retry = std::min(retry * 2, 15 * 60);
         }
-        for (int i = 0; i < 15 * 60 * 10 && !stop_; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 

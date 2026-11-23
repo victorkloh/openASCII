@@ -5,6 +5,7 @@
 #include "util/Win32.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <format>
 #include <vector>
@@ -115,6 +116,7 @@ std::wstring AtlasDesc::key() const {
     for (char32_t c : charset) k += std::format(L"{:x},", static_cast<unsigned>(c));
     k += L'|';
     for (char32_t c : glyphs) k += std::format(L"{:x},", static_cast<unsigned>(c));
+    if (charsetOnly) k += L"|only";
     return k;
 }
 
@@ -123,12 +125,21 @@ void GlyphAtlas::reset() {
     inkSrv_.Reset();
     slotCount_ = 0;
     slots_.clear();
+    textSlots_.clear();
     key_.clear();
 }
 
 uint16_t GlyphAtlas::slot(char32_t cp) const {
     const auto it = slots_.find(cp);
     return it != slots_.end() ? it->second : fallback_;
+}
+
+uint16_t GlyphAtlas::textSlot(char32_t cp) const {
+    if (textSlots_.empty()) return slot(cp);
+    const auto it = textSlots_.find(cp);
+    if (it != textSlots_.end()) return it->second;
+    const auto q = textSlots_.find(U'?');
+    return q != textSlots_.end() ? q->second : fallback_;
 }
 
 HRESULT GlyphAtlas::build(ID3D11Device* device, IDWriteFactory2* dwrite, const AtlasDesc& desc) {
@@ -179,6 +190,14 @@ HRESULT GlyphAtlas::build(ID3D11Device* device, IDWriteFactory2* dwrite, const A
     for (char32_t c = 0xA1; c <= 0xFF; ++c) { // Latin-1: acentos das mensagens em português
         if (chars.find(c) == std::u32string::npos) chars += c;
     }
+    // "Só o charset": os slots acima vão ser redesenhados com caracteres do charset; as
+    // mensagens da app precisam do texto verdadeiro, por isso vai uma cópia intacta no fim.
+    const bool charsetOnly = desc.charsetOnly && desc.charset.size() > 0;
+    const int pristineStart = static_cast<int>(chars.size());
+    if (charsetOnly) {
+        for (char32_t c = 0x20; c < 0x7F; ++c) chars += c;
+        for (char32_t c = 0xA1; c <= 0xFF; ++c) chars += c;
+    }
     if (chars.size() > 65535) chars.resize(65535);
 
     // 4) Rasterizar para um buffer em CPU e enviar para a GPU de uma vez.
@@ -196,7 +215,11 @@ HRESULT GlyphAtlas::build(ID3D11Device* device, IDWriteFactory2* dwrite, const A
     for (int i = 0; i < count; ++i) {
         const char32_t cp = chars[static_cast<size_t>(i)];
         const int x0 = (i % columns) * cellW, y0 = (i / columns) * cellH;
-        if (!slots_.contains(cp)) slots_[cp] = static_cast<uint16_t>(i);
+        if (i >= pristineStart) {
+            textSlots_[cp] = static_cast<uint16_t>(i); // cópia intacta (só com charsetOnly)
+        } else if (!slots_.contains(cp)) {
+            slots_[cp] = static_cast<uint16_t>(i);
+        }
         if (isProceduralGlyph(cp)) {
             std::span<uint8_t> cell(atlas.data() + static_cast<size_t>(y0) * atlasW + x0,
                                     static_cast<size_t>(cellH - 1) * atlasW + cellW);
@@ -209,6 +232,97 @@ HRESULT GlyphAtlas::build(ID3D11Device* device, IDWriteFactory2* dwrite, const A
         }
     }
     fallback_ = slot(U'?');
+
+    // Tinta de cada glifo: a média da cobertura da célula (o glow usa-a como intensidade, e o
+    // modo "só o charset" escolhe por ela o substituto de cada sprite).
+    auto cellOrigin = [&](int i) { return std::pair{(i % columns) * cellW, (i / columns) * cellH}; };
+    std::vector<float> ink(static_cast<size_t>(count), 0.0f);
+    for (int i = 0; i < count; ++i) {
+        const auto [x0, y0] = cellOrigin(i);
+        uint32_t sum = 0;
+        for (int y = 0; y < cellH; ++y)
+            for (int x = 0; x < cellW; ++x) sum += atlas[static_cast<size_t>(y0 + y) * atlasW + x0 + x];
+        ink[static_cast<size_t>(i)] = static_cast<float>(sum) / (255.0f * static_cast<float>(cellW * cellH));
+    }
+
+    if (charsetOnly) {
+        // Cada sprite/caractere de texto passa a ter o desenho do caractere do charset mais
+        // parecido: a mesma tinta relativa (o mais "cheio" vai para o mais cheio do charset) E a
+        // tinta no mesmo sítio da célula (grelha 3x3), para um '/' ou um '<' ficarem com um
+        // caractere de forma parecida quando o charset o permite (braille, caixas). O que é vazio
+        // continua vazio (espaços entre palavras, partes transparentes), e um sprite que já é um
+        // caractere do charset fica como está.
+        constexpr float kBlank = 0.004f;
+        auto features = [&](int i) {
+            const auto [x0, y0] = cellOrigin(i);
+            std::array<float, 9> f{};
+            std::array<int, 9> n{};
+            for (int y = 0; y < cellH; ++y) {
+                for (int x = 0; x < cellW; ++x) {
+                    const int b = (y * 3 / cellH) * 3 + (x * 3 / cellW);
+                    f[static_cast<size_t>(b)] += atlas[static_cast<size_t>(y0 + y) * atlasW + x0 + x] / 255.0f;
+                    ++n[static_cast<size_t>(b)];
+                }
+            }
+            // Distribuição da tinta pelas 9 zonas (soma 1): a FORMA, independente da quantidade.
+            float total = 0.0f;
+            for (size_t b = 0; b < 9; ++b) {
+                f[b] = n[b] ? f[b] / static_cast<float>(n[b]) : 0.0f;
+                total += f[b];
+            }
+            if (total > 0.0f)
+                for (float& v : f) v /= total;
+            return f;
+        };
+        std::vector<int> candidates;
+        float maxCharset = 0.0f, maxOthers = 0.0f;
+        for (int i = 0; i < charsetSize_; ++i) {
+            if (ink[static_cast<size_t>(i)] > kBlank) {
+                candidates.push_back(i);
+                maxCharset = std::max(maxCharset, ink[static_cast<size_t>(i)]);
+            }
+        }
+        for (int i = charsetSize_; i < pristineStart; ++i) maxOthers = std::max(maxOthers, ink[static_cast<size_t>(i)]);
+        int replaced = 0;
+        if (!candidates.empty() && maxOthers > kBlank) {
+            std::vector<std::array<float, 9>> candidateFeatures;
+            for (int c : candidates) candidateFeatures.push_back(features(c));
+            for (int i = charsetSize_; i < pristineStart; ++i) {
+                const char32_t cp = chars[static_cast<size_t>(i)];
+                if (ink[static_cast<size_t>(i)] <= kBlank || desc.charset.find(cp) != std::u32string::npos) continue;
+                const auto f = features(i);
+                // Densidade relativa: o mais cheio dos sprites corresponde ao mais cheio do charset.
+                const float target = ink[static_cast<size_t>(i)] / maxOthers;
+                int best = candidates.front();
+                float bestDist = 1e9f;
+                for (size_t j = 0; j < candidates.size(); ++j) {
+                    // Forma (distribuição da tinta, 0..2) + densidade relativa (0..1). Nos conjuntos
+                    // de "rampa" (blocos, pontos) as formas quase não diferem e decide a densidade;
+                    // nos de linhas (caixas, braille) decide a forma: '(' vira '│', '~' vira '─'.
+                    float shape = 0.0f;
+                    for (size_t b = 0; b < 9; ++b) {
+                        const float d = f[b] - candidateFeatures[j][b];
+                        shape += d * d;
+                    }
+                    const float density = ink[static_cast<size_t>(candidates[j])] / maxCharset - target;
+                    const float dist = shape + density * density;
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        best = candidates[j];
+                    }
+                }
+                const auto [dx, dy] = cellOrigin(i);
+                const auto [sx, sy] = cellOrigin(best);
+                for (int y = 0; y < cellH; ++y) {
+                    std::copy_n(&atlas[static_cast<size_t>(sy + y) * atlasW + sx], cellW,
+                                &atlas[static_cast<size_t>(dy + y) * atlasW + dx]);
+                }
+                ink[static_cast<size_t>(i)] = ink[static_cast<size_t>(best)];
+                ++replaced;
+            }
+        }
+        log::info(L"Atlas: só o charset — {} sprites/caracteres trocados por caracteres do charset", replaced);
+    }
 
     D3D11_TEXTURE2D_DESC td{};
     td.Width = static_cast<UINT>(atlasW);
@@ -227,15 +341,6 @@ HRESULT GlyphAtlas::build(ID3D11Device* device, IDWriteFactory2* dwrite, const A
         return hr;
     }
 
-    // Tinta de cada glifo: a média da cobertura da célula (o glow usa-a como intensidade).
-    std::vector<float> ink(static_cast<size_t>(count), 0.0f);
-    for (int i = 0; i < count; ++i) {
-        const int x0 = (i % columns) * cellW, y0 = (i / columns) * cellH;
-        uint32_t sum = 0;
-        for (int y = 0; y < cellH; ++y)
-            for (int x = 0; x < cellW; ++x) sum += atlas[static_cast<size_t>(y0 + y) * atlasW + x0 + x];
-        ink[static_cast<size_t>(i)] = static_cast<float>(sum) / (255.0f * static_cast<float>(cellW * cellH));
-    }
     D3D11_BUFFER_DESC bd{};
     bd.ByteWidth = static_cast<UINT>(ink.size() * sizeof(float));
     bd.Usage = D3D11_USAGE_IMMUTABLE;

@@ -1,0 +1,76 @@
+# Release: ao criar uma tag vX.Y.Z (igual à versão do CMakeLists.txt), compila, corre os testes,
+# gera o instalador e o zip portátil e cria uma release em RASCUNHO com as notas de
+# docs/releases/vX.Y.Z.md. O rascunho só fica público quando alguém carregar em "Publish".
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2022
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versão
+        id: version
+        shell: pwsh
+        run: |
+          $cmake = Get-Content CMakeLists.txt -Raw
+          if ($cmake -notmatch 'project\(AsciiPaper\s+VERSION\s+(\d+\.\d+\.\d+)') { throw 'Versão não encontrada no CMakeLists.txt' }
+          $v = $Matches[1]
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$v") {
+            throw "A tag $env:GITHUB_REF_NAME não bate com a versão do CMakeLists.txt ($v)"
+          }
+          if (-not (Test-Path "docs/releases/v$v.md")) { throw "Faltam as notas da release: docs/releases/v$v.md" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: vcpkg (na baseline do vcpkg.json)
+        shell: pwsh
+        run: |
+          $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+          git clone --quiet https://github.com/microsoft/vcpkg.git $env:VCPKG_ROOT
+          git -C $env:VCPKG_ROOT checkout --quiet $baseline
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
+      - name: Cache dos pacotes do vcpkg
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-${{ hashFiles('vcpkg.json') }}
+
+      - name: Compilar e testar
+        shell: pwsh
+        run: ./scripts/build.ps1 -Config Release
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Empacotar (instalador + zip + somas)
+        shell: pwsh
+        run: ./scripts/package.ps1 -SkipBuild -RequireInstaller
+
+      - name: Criar a release (rascunho)
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: AsciiPaper ${{ steps.version.outputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          body_path: docs/releases/v${{ steps.version.outputs.version }}.md
+          files: |
+            dist/AsciiPaper-${{ steps.version.outputs.version }}-setup.exe
+            dist/AsciiPaper-${{ steps.version.outputs.version }}-win64.zip
+            dist/SHA256SUMS.txt

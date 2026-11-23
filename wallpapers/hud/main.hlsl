@@ -84,7 +84,7 @@ bool bigChar(int2 c, int2 pos, uint ch, int sx, int sy)
 // Gráfico com histórico (estado): devolve o valor desta coluna e escreve-o no estado.
 float history(int2 c, int4 g, float current, inout float4 state)
 {
-    bool tick = floor(time) != floor(time - dt); // passou um segundo
+    bool tick = fixedStep(1.0); // passou um segundo (fixedStep aguenta dias ligado; `time` não)
     float v = prev(c).x;
     if (tick) v = c.x == g.z - 1 ? current : prev(c + int2(1, 0)).x;
     state.x = v;

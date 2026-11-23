@@ -24,7 +24,9 @@ constexpr int kCols = 3;
 constexpr float kGridGap = 8.0f;
 constexpr float kLabelH = 18.0f;
 constexpr float kMaxRows = 3.5f; // linhas visíveis no máximo (meia linha = "há mais")
-constexpr float kMinRows = 1.5f; // num ecrã muito baixo, nunca menos do que isto
+constexpr float kMinRows = 1.5f; // num ecrã muito baixo, nunca menos do que isto (se couber)
+constexpr float kMinGridH = 40.0f; // limite absoluto: uma faixa da grelha, com scroll
+constexpr float kEmptyH = 44.0f;   // sem wallpapers: o texto que diz como criar o primeiro
 constexpr UINT kMsgRelayout = WM_APP + 41;
 
 constexpr float kHeaderH = 28.0f, kHeaderGap = 14.0f;
@@ -112,9 +114,13 @@ float TrayFlyout::fixedHeight() const {
     return h;
 }
 
-float TrayFlyout::layoutHeight() {
-    return fixedHeight() + std::min(gridContentHeight(), kMaxRows * rowHeight() - kGridGap);
+float TrayFlyout::gridAreaHeight(float rows) const {
+    // Sem wallpapers nenhuns, a "grelha" é uma linha de texto a dizer como criar o primeiro.
+    if (bases_.empty()) return kEmptyH;
+    return std::min(gridContentHeight(), rows * rowHeight() - kGridGap);
 }
+
+float TrayFlyout::layoutHeight() { return fixedHeight() + gridAreaHeight(kMaxRows); }
 
 void TrayFlyout::place(const RECT& a) {
     anchor_ = a;
@@ -125,8 +131,13 @@ void TrayFlyout::place(const RECT& a) {
     const int margin = static_cast<int>(12 * s);
     // Altura: a desejada, mas nunca mais do que cabe na área de trabalho deste monitor.
     const float available = static_cast<float>(work.bottom - work.top - 2 * margin) / s;
-    const float minimum = fixedHeight() + std::min(gridContentHeight(), kMinRows * rowHeight() - kGridGap);
-    contentHeight_ = std::max(std::min(layoutHeight(), available), minimum);
+    // Ecrã muito baixo: com os ajustes abertos não sobra espaço para a grelha; fechá-los
+    // antes de deixar o rodapé (Personalizar/Sair) sair do ecrã.
+    if (adjustOpen_ && fixedHeight() + kMinGridH > available) adjustOpen_ = false;
+    const float minimum = fixedHeight() + gridAreaHeight(kMinRows);
+    // O mínimo de 1,5 linhas só vale se couber: o painel nunca passa da área de trabalho.
+    contentHeight_ = std::min(std::max(std::min(layoutHeight(), available), minimum),
+                              std::max(available, fixedHeight() + kMinGridH));
     const int w = static_cast<int>(kWidth * s), h = static_cast<int>(contentHeight_ * s);
     const int cx = (a.left + a.right) / 2;
     int x = std::clamp(cx - w / 2, static_cast<int>(work.left) + margin, static_cast<int>(work.right) - w - margin);
@@ -135,7 +146,7 @@ void TrayFlyout::place(const RECT& a) {
     if (a.top >= work.bottom - 2) y = work.bottom - h - margin;
     else if (a.bottom <= work.top + 2) y = work.top + margin;
     else y = std::clamp(static_cast<int>(a.top) - h / 2, static_cast<int>(work.top) + margin,
-                        static_cast<int>(work.bottom) - h - margin);
+                        std::max(static_cast<int>(work.top) + margin, static_cast<int>(work.bottom) - h - margin));
     if (a.right <= work.left + 2) x = work.left + margin;
     if (a.left >= work.right - 2) x = work.right - w - margin;
     y = std::max(y, static_cast<int>(work.top) + margin); // nunca acima do topo
@@ -250,7 +261,7 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
     ui.text(rect(kPad, y, w - 2 * kPad, kEyebrowH), std::to_wstring(bases_.size()), t.faint, count);
     y += kEyebrowH + kEyebrowGap;
 
-    const float gridH = std::max(rowHeight() - kGridGap, h - fixedHeight());
+    const float gridH = std::max(kMinGridH, h - fixedHeight());
     const R viewport{kPad - 4, y, w - kPad + 4, y + gridH}; // 4 px a mais de cada lado para o anel de seleção
     const Id scrollId = makeId(L"flyout-grid");
     const float cardW = cardWidth(), thumbH = thumbHeight(), rowH = rowHeight();
@@ -269,6 +280,14 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
     const float content = gridContentHeight();
     const float off = ui.scrollArea(scrollId, viewport, content);
     ui.pushClip(viewport);
+    if (bases_.empty()) {
+        TextStyle empty;
+        empty.size = 12.5f;
+        empty.wrap = true;
+        empty.valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+        ui.text(rect(kPad, y, w - 2 * kPad, gridH), L"Ainda não há wallpapers. Em Personalizar podes criar o primeiro.",
+                t.muted, empty);
+    }
     for (size_t k = 0; k < bases_.size(); ++k) {
         const auto& it = items_[bases_[k]];
         const int row = static_cast<int>(k) / kCols, col = static_cast<int>(k) % kCols;

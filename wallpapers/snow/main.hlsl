@@ -17,11 +17,52 @@
 static const float PI = 3.14159265;
 
 // "Chão": fora dos monitores (por baixo do último ecrã), ou por baixo de uma janela/ícone.
-bool solid(int2 p)
+bool solidSlow(int2 p)
 {
     if (p.y >= int(grid.y) || p.x < 0 || p.x >= int(grid.x)) return true;
     if (p.y < 0) return false;
     return !visible(p) || obstacleAt(p) >= 0;
+}
+
+// O autómato só olha para a vizinhança 3x3 de cada célula, mas pergunta por ela ~20 vezes, e
+// cada pergunta percorria TODOS os obstáculos (até 256 janelas e ícones): com o ambiente de
+// trabalho cheio eram milhares de testes por célula, a cada frame. Agora a vizinhança é
+// calculada uma vez, numa só passagem pelos obstáculos, e guardada em 9 bits.
+// Truque útil para qualquer wallpaper que consulte muito os obstáculos.
+static int2 C0;     // a célula desta thread
+static uint SOLID9; // bit (dy + 1) * 3 + (dx + 1) = solidSlow(C0 + (dx, dy))
+
+void buildSolid(int2 c)
+{
+    C0 = c;
+    uint bits = 0;
+    [unroll] for (int dy = -1; dy <= 1; dy++)
+    [unroll] for (int dx = -1; dx <= 1; dx++)
+    {
+        int2 p = c + int2(dx, dy);
+        bool s = p.y >= int(grid.y) || p.x < 0 || p.x >= int(grid.x) || (p.y >= 0 && !visible(p));
+        if (s) bits |= 1u << uint((dy + 1) * 3 + (dx + 1));
+    }
+    [loop] for (uint k = 0; k < obstacleCount(); k++)
+    {
+        int4 r = obstacleRect(k);
+        if (r.z < c.x || r.x > c.x + 1 || r.w < c.y || r.y > c.y + 1) continue; // longe desta vizinhança
+        [unroll] for (int dy2 = -1; dy2 <= 1; dy2++)
+        [unroll] for (int dx2 = -1; dx2 <= 1; dx2++)
+        {
+            int2 p = c + int2(dx2, dy2);
+            if (p.y >= 0 && p.x >= r.x && p.y >= r.y && p.x < r.z && p.y < r.w)
+                bits |= 1u << uint((dy2 + 1) * 3 + (dx2 + 1));
+        }
+    }
+    SOLID9 = bits;
+}
+
+bool solid(int2 p)
+{
+    int2 d = p - C0;
+    if (all(abs(d) <= 1)) return ((SOLID9 >> uint((d.y + 1) * 3 + (d.x + 1))) & 1u) != 0u;
+    return solidSlow(p);
 }
 
 bool snowAt(int2 p) { return p.y >= 0 && !solid(p) && prev(p).x > 0.5; }
@@ -64,6 +105,7 @@ CellOut cell(CellIn i)
     o.fg = 0;
     o.state = 0;
     int2 c = int2(i.id);
+    buildSolid(c);
 
     // Céu: um degradê muito discreto (mais escuro em cima).
     int4 mon = monitorRectAt(c);

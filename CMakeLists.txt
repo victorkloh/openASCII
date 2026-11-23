@@ -103,6 +103,10 @@ target_link_libraries(asciipaper PRIVATE
     mfplat mfreadwrite mfuuid mf winhttp propsys)
 # O manifesto (PerMonitorV2, UTF-8, Win10) vem do app.rc; o linker não gera outro.
 target_link_options(asciipaper PRIVATE /MANIFEST:NO)
+# Media Foundation (vídeo/webcam) carregado só quando é preciso: as edições "N" do Windows não
+# o trazem e, ligado diretamente, a app nem arrancava. SourceMedia verifica antes de o usar.
+target_link_options(asciipaper PRIVATE /DELAYLOAD:mfplat.dll /DELAYLOAD:mfreadwrite.dll /DELAYLOAD:mf.dll)
+target_link_libraries(asciipaper PRIVATE delayimp)
 set_target_properties(asciipaper PROPERTIES
     VS_DEBUGGER_COMMAND_ARGUMENTS "--windowed --verbose")
 # Os shaders internos vão embebidos pelo .rc: recompilar o .rc quando mudam.

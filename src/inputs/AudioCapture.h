@@ -7,7 +7,10 @@
 #include <array>
 #include <atomic>
 #include <mutex>
+#include <string>
 #include <thread>
+
+struct IMMDeviceEnumerator;
 
 namespace ap::inputs {
 
@@ -27,6 +30,8 @@ public:
 
 private:
     void run();
+    // Captura da saída predefinida até ela mudar, falhar ou stop(); run() volta a chamar.
+    void session(IMMDeviceEnumerator* enumerator, bool& warned);
 
     std::thread thread_;
     std::atomic<bool> stop_{false};

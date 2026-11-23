@@ -222,6 +222,30 @@ TEST_CASE("themeToToml faz o caminho inverso de parseTheme") {
     CHECK(themeIsEmpty(Theme{}));
 }
 
+TEST_CASE("charset_only: manifest, tema e ida e volta") {
+    // Por defeito os sprites e o texto usam os seus próprios caracteres.
+    CHECK_FALSE(parseManifest("[render]\ncharset = \" .:\"\n").manifest.charsetOnly);
+    CHECK(parseManifest("[render]\ncharset = \" .:\"\ncharset_only = true\n").manifest.charsetOnly);
+    CHECK_FALSE(parseManifest("[render]\ncharset_only = 1\n").error.empty());
+
+    Theme t;
+    t.charset = U" 01";
+    t.charsetOnly = true;
+    const auto back = parseTheme(themeToToml(t), false);
+    REQUIRE(back.error.empty());
+    REQUIRE(back.theme.charsetOnly.has_value());
+    CHECK(*back.theme.charsetOnly);
+
+    Manifest m;
+    applyTheme(m, back.theme);
+    CHECK(m.charset == U" 01");
+    CHECK(m.charsetOnly);
+
+    Theme onlyFlag;
+    onlyFlag.charsetOnly = false;
+    CHECK_FALSE(themeIsEmpty(onlyFlag));
+}
+
 TEST_CASE("erros dos temas") {
     CHECK_FALSE(parseTheme("cell = 7\n").error.empty());
     CHECK_FALSE(parseTheme("base = \"x\"\ncell = 1\n").error.empty());

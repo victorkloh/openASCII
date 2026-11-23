@@ -8,7 +8,7 @@
 | **valley** | **clock** | **fire** |
 | ![valley](wallpapers/valley/preview.png) | ![clock](wallpapers/clock/preview.png) | ![fire](wallpapers/fire/preview.png) |
 
-> **Estado: alpha (v0.4.0).** Fases 0–3 feitas, mais o launcher e o menu da bandeja (parte da Fase 5). Os wallpapers em Lua (fluid, particles, life, clock) chegam na Fase 4. Ver o [roadmap](#roadmap).
+> **Estado: alpha (v0.5.0).** Fases 0–3 feitas, mais o launcher e o menu da bandeja (parte da Fase 5). Os wallpapers em Lua (fluid, particles, life, clock) chegam na Fase 4. Ver o [roadmap](#roadmap).
 
 ## Efeitos incluídos
 
@@ -80,11 +80,23 @@ Medido (Release, RTX 4060, 2 monitores, valley a 30 fps): **0,7% de CPU**, GPU 0
 
 ## Instalar e usar
 
-1. Transfere o `AsciiPaper-<versão>-win64.zip` da página de [Releases](../../releases) e extrai-o para uma pasta.
-2. Corre `asciipaper.exe`. O ícone aparece na área de notificação (junto ao relógio, talvez escondido na seta **^**).
-3. Clica no ícone para escolher o wallpaper, pausar, abrir o launcher ou sair. Ao sair, o teu wallpaper original volta.
+Na página de [Releases](../../releases) há duas formas, ambas sem permissões de administrador:
 
-Não precisa de instalação nem de permissões de administrador. O Windows SmartScreen pode avisar, porque o executável ainda não está assinado.
+**Instalador (recomendado): `AsciiPaper-<versão>-setup.exe`**
+1. Corre o instalador. Fica em `%LOCALAPPDATA%\Programs\AsciiPaper`, só para o teu utilizador.
+2. Escolhe o que instalar: **completa** (a app e os 28 wallpapers predefinidos) ou **só a app**, sem nenhum wallpaper pronto a usar. Neste caso, o fundo do Windows fica à vista até criares o teu primeiro wallpaper no launcher.
+3. Deixa marcado **Iniciar o AsciiPaper com o Windows** se o quiseres sempre ligado. Podes mudar isto depois nas Definições.
+4. No fim, o launcher abre. O atalho do Menu Iniciar também o abre, mesmo com a app já a correr.
+
+Para desinstalar: Definições do Windows › Aplicações. A app é fechada primeiro e o teu wallpaper original volta. As tuas definições e os wallpapers que criaste só são apagados se disseres que sim.
+
+**Portátil: `AsciiPaper-<versão>-win64.zip`**
+1. Extrai o zip para uma pasta e corre `asciipaper.exe`.
+2. Para arrancar com o Windows, liga a opção nas Definições do launcher.
+
+Em ambos os casos, o ícone aparece na área de notificação (junto ao relógio, talvez escondido na seta **^**). Clica nele para escolher o wallpaper, pausar, abrir o launcher ou sair. Ao sair, o teu wallpaper original volta.
+
+O Windows SmartScreen pode avisar ("O Windows protegeu o PC"), porque o executável ainda não está assinado: **Mais informações › Executar mesmo assim**. O `SHA256SUMS.txt` da release serve para confirmar que o ficheiro não foi alterado (`Get-FileHash <ficheiro>`).
 
 ### Linha de comandos
 
@@ -142,9 +154,11 @@ pwsh scripts/build.ps1
 # 3. Correr numa janela, com logs na consola
 build\msvc\Release\asciipaper.exe --windowed --verbose
 
-# 4. Criar o zip de release em dist/
+# 4. Criar a release em dist/: zip portátil, instalador (com o Inno Setup 6 instalado) e SHA256SUMS.txt
 pwsh scripts/package.ps1
 ```
+
+O instalador é descrito em [`installer/AsciiPaper.iss`](installer/AsciiPaper.iss) (Inno Setup 6: `winget install JRSoftware.InnoSetup`). No GitHub, criar uma tag `vX.Y.Z` igual à versão do `CMakeLists.txt` compila, testa e prepara uma release em rascunho com estes ficheiros (`.github/workflows/release.yml`).
 
 Com CMake ≥ 3.25 e vcpkg já instalados, basta definir `VCPKG_ROOT` e usar os presets (`cmake --preset msvc`, `cmake --build --preset msvc-release`, `ctest --preset msvc-release`). As dependências (`wil`, `tomlplusplus`, `doctest`) vêm do vcpkg em modo manifest, compiladas estaticamente.
 

@@ -189,7 +189,7 @@ grain = 0.2       # grão de filme
 
 Sem `[post]`, o render usa o caminho rápido de sempre (zero custo). O utilizador pode ligar, desligar ou afinar estes efeitos em qualquer wallpaper no launcher ("efeitos de ecrã": Nenhum, CRT, Néon, Cinema ou à medida).
 
-**Charset ou caracteres próprios?** Se o teu wallpaper desenha só com `o.glyph` (sprites, `asciiGlyph`), põe `charset = " "`: o launcher mostra que os conjuntos de caracteres não se aplicam, em vez de oferecer opções que não mudam nada.
+**Charset ou caracteres próprios?** Se o teu wallpaper desenha só com `o.glyph` (sprites, `asciiGlyph`), põe `charset = " "`: o launcher explica que o wallpaper usa os seus próprios caracteres. Quando alguém escolhe um conjunto no launcher, liga-se `charset_only`: os teus sprites e o teu texto passam a ser desenhados com o caractere do conjunto mais parecido (na forma e na densidade). Não precisas de fazer nada para isso funcionar. As mensagens de erro da app ficam sempre legíveis.
 
 ## 5. Técnicas avançadas
 
@@ -258,6 +258,7 @@ Valores fora de `[min, max]` são limitados (com um aviso no log).
 | `render.font` | nome ou `.ttf/.otf` | `"Cascadia Mono"` (alternativas: Consolas, Courier New) |
 | `render.font_weight` | 100–950 | 400 |
 | `render.charset` | texto UTF-8 | `" .:-=+*#%@"` |
+| `render.charset_only` | `true`/`false`: só os caracteres do charset aparecem; os de `glyph(k)` e `asciiGlyph` são trocados pelo do charset mais parecido (forma e densidade). Também funciona em temas. | `false` |
 | `colors.background` | `"#rgb"`, `"#rrggbb"`, `"#rrggbbaa"` | `#05070d` |
 | `colors.palette` | 1–8 cores | `[background, #e0f2fe]` |
 | `params.<nome>` | `{ default, min, max }` (máx. 16) | |

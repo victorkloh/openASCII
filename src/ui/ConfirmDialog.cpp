@@ -13,13 +13,37 @@ bool ConfirmDialog::create(HINSTANCE instance) {
 
 void ConfirmDialog::ask(std::wstring title, std::wstring message, std::wstring acceptLabel, std::wstring declineLabel,
                         Rgba8 accent, Callback done) {
-    title_ = std::move(title);
-    message_ = std::move(message);
-    accept_ = std::move(acceptLabel);
-    decline_ = std::move(declineLabel);
-    accent_ = accent;
+    Question q{std::move(title), std::move(message), std::move(acceptLabel), std::move(declineLabel), accent,
+               std::move(done)};
+    if (showing_) {
+        if (q.title == title_) {
+            // A mesma pergunta outra vez (ex.: o wallpaper recarregou): atualizar a que está aberta.
+            message_ = std::move(q.message);
+            done_ = std::move(q.done);
+            invalidate();
+            return;
+        }
+        for (auto& queued : queue_) {
+            if (queued.title == q.title) {
+                queued = std::move(q);
+                return;
+            }
+        }
+        queue_.push_back(std::move(q));
+        return;
+    }
+    show(std::move(q));
+}
+
+void ConfirmDialog::show(Question q) {
+    title_ = std::move(q.title);
+    message_ = std::move(q.message);
+    accept_ = std::move(q.accept);
+    decline_ = std::move(q.decline);
+    accent_ = q.accent;
     remember_ = false;
-    done_ = std::move(done);
+    done_ = std::move(q.done);
+    showing_ = true;
     applyWindowTheme();
 
     // Centrado na área de trabalho do monitor principal.
@@ -35,10 +59,17 @@ void ConfirmDialog::ask(std::wstring title, std::wstring message, std::wstring a
 }
 
 void ConfirmDialog::finish(bool accepted) {
+    if (!showing_) return; // Esc e um clique no mesmo instante: responder só uma vez
     ShowWindow(hwnd_, SW_HIDE);
+    showing_ = false;
     Callback cb = std::move(done_);
     done_ = nullptr;
-    if (cb) cb(accepted, remember_);
+    if (cb) cb(accepted, remember_); // pode fazer outra pergunta (fica logo no ecrã)
+    if (!showing_ && !queue_.empty()) {
+        Question next = std::move(queue_.front());
+        queue_.pop_front();
+        show(std::move(next));
+    }
 }
 
 HRESULT ConfirmDialog::renderToPng(const std::wstring& path) { return renderToPngImpl(path, kW, kH, 2.0f); }

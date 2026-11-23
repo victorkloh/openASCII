@@ -95,7 +95,8 @@ cbuffer Frame : register(b0)
     uint   _windowCount;   // os primeiros _windowCount obstáculos são janelas; o resto ícones
     float4 textInfo;       // "lines:": segundos desde que a linha mudou, índice da linha, nº de linhas, intervalo
     uint   _atlasSlots;    // glifos no atlas (os glifos brutos de asciiGlyph() estão abaixo disto)
-    uint3  _pad2;
+    float  _stepTime;      // `time` com volta a cada hora, calculado em double na CPU (fixedStep)
+    uint2  _pad2;
 };
 
 StructuredBuffer<float4>   _statePrev : register(t0);
@@ -199,7 +200,9 @@ bool justClicked() { return _clicked != 0; }
 // Uma simulação que avança um passo por frame fica com a velocidade do FPS (a 60 fps corre
 // ao dobro de 30). Para correr igual a qualquer FPS, avança só quando é hora de um passo de
 // `hz` por segundo e, nos outros frames, copia o estado: if (!fixedStep(30)) o.state = prev(c);
-bool fixedStep(float hz) { return floor(time * hz) != floor((time - dt) * hz); }
+// Usa _stepTime e não `time`: em float, `time - dt` deixa de mudar ao fim de uns dias ligado
+// (a precisão de um float de 400 000 s é ~0,03 s) e as simulações congelavam.
+bool fixedStep(float hz) { return floor(_stepTime * hz) != floor((_stepTime - dt) * hz); }
 
 // ---------------------------------------------------------------------------
 // Obstáculos: as janelas abertas ([inputs] windows = true) e os ícones do ambiente de

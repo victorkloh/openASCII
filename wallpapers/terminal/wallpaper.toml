@@ -3,6 +3,7 @@ name = "Terminal"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Um monitor de fósforo antigo que escreve citações, letra a letra, e muda de citação a cada 20 segundos. É só para ver: não reage ao rato. Podes pôr as tuas frases no ficheiro quotes.txt, na pasta deste wallpaper."
+description_en = "An old phosphor monitor typing quotes letter by letter, with a new quote every 20 seconds. Just to watch: it does not react to the mouse. You can put your own lines in quotes.txt, in this wallpaper's folder."
 category = "Retro"
 
 [render]

@@ -3,6 +3,7 @@ name = "Aquarium"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Um aquário ASCII: peixes, bolhas, algas e areia. Os peixes fogem do rato; clicar deixa cair comida."
+description_en = "An ASCII aquarium: fish, bubbles, seaweed and sand. The fish swim away from the mouse; click to drop food."
 category = "Ambiente"
 
 [render]

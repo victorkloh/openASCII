@@ -3,6 +3,7 @@
 // Ver PROJECT.md, secção 5. Lógica pura, testada em tests/test_manifest.cpp.
 
 #include <array>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -48,6 +49,7 @@ struct Manifest {
     std::string author;
     std::string version;
     std::string description;
+    std::map<std::string, std::string> descriptions; // traduções: description_en -> descriptions["en"]
     std::string category; // agrupa no launcher: "Paisagens", "Simulações", "3D e espaço"...
     // [render]
     WallpaperMode mode = WallpaperMode::Shader;

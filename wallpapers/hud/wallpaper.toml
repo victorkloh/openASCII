@@ -3,6 +3,7 @@ name = "HUD"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Um painel ao vivo com a hora em grande, o uso do processador e da memória e o tempo lá fora. Para ver o tempo, escreve a tua cidade nas Definições. É só para ver: não reage ao rato."
+description_en = "A live dashboard with a big clock, CPU and memory usage and the weather outside. To see the weather, type your city in Settings. Just to watch: it does not react to the mouse."
 category = "Dados e média"
 
 [render]

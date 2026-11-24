@@ -3,6 +3,7 @@ name = "Fractal"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Um zoom sem fim no conjunto de Mandelbrot, a visitar os seus pontos mais famosos. É só para ver: não reage ao rato."
+description_en = "An endless zoom into the Mandelbrot set, visiting its most famous spots. Just to watch: it does not react to the mouse."
 category = "Simulações"
 
 [render]

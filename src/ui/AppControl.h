@@ -41,6 +41,14 @@ struct GlobalSettings {
     int playlistCount = 0;    // só leitura: quantos wallpapers estão na playlist
 };
 
+// Um monitor e o wallpaper que lhe foi escolhido (vazio = o wallpaper geral).
+struct MonitorChoice {
+    std::wstring id;    // identificador estável do monitor
+    std::wstring label; // "Monitor 2 · 1080×1920"
+    bool primary = false;
+    std::filesystem::path wallpaper;
+};
+
 class AppControl {
 public:
     virtual ~AppControl() = default;
@@ -66,6 +74,8 @@ public:
     virtual bool createWallpaper(const std::wstring& name, const std::filesystem::path& templatePath,
                                  std::filesystem::path& created, std::wstring& error) = 0;
     virtual void openInEditor(const std::filesystem::path& wallpaperPath) = 0;
+    // Apaga de vez um wallpaper criado pelo utilizador (a interface pede confirmação antes).
+    virtual bool deleteWallpaper(const std::filesystem::path& path, std::wstring& error) = 0;
     virtual void openFolder(const std::filesystem::path& path) = 0;
     virtual std::vector<std::wstring> monospaceFonts() = 0;
 
@@ -81,6 +91,14 @@ public:
     // Playlist (trocar de wallpaper sozinho de N em N minutos).
     virtual bool inPlaylist(const std::filesystem::path& path) const = 0;
     virtual void setInPlaylist(const std::filesystem::path& path, bool included) = 0;
+
+    // Wallpaper por monitor (vazio = voltar ao wallpaper geral). Só no modo wallpaper.
+    virtual std::vector<MonitorChoice> monitorChoices() = 0;
+    virtual void setMonitorWallpaper(const std::wstring& id, const std::filesystem::path& path) = 0;
+
+    // Idioma da interface: perguntado antes de tudo na primeira vez ("pt", "en"...).
+    virtual bool languagePending() const = 0;
+    virtual void setLanguageCode(const std::string& code) = 0;
 
     // Primeiros passos: mostrados no launcher na primeira vez que a app arranca.
     virtual bool firstRunPending() const = 0;

@@ -3,6 +3,7 @@ name = "Fireworks"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Fogo de artifício sobre a cidade, com rastos e brilho no céu. Clica para lançar o teu."
+description_en = "Fireworks over the city, with trails and a glowing sky. Click to launch your own."
 category = "Ambiente"
 
 [render]

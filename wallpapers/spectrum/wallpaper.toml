@@ -3,6 +3,7 @@ name = "Spectrum"
 author = "OpenASCII"
 version = "1.0.0"
 description = "O som que está a tocar no PC, em ASCII: um anel de frequências, barras com picos e ondas de choque em cada batida. Clica para lançar uma onda. Sem som, fica numa animação calma. O som não é gravado."
+description_en = "The sound playing on your PC, in ASCII: a frequency ring, bars with peaks and shock waves on every beat. Click to send a wave. Without sound it stays in a calm animation. Nothing is recorded."
 category = "Dados e média"
 
 [render]

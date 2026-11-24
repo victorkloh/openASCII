@@ -3,6 +3,7 @@ name = "Arcade"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Um Breakout que joga sozinho. Põe o rato no ambiente de trabalho e a raquete passa a ser tua."
+description_en = "A Breakout that plays itself. Put the mouse on the desktop and the paddle is yours."
 category = "Jogos"
 
 [render]

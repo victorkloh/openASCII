@@ -3,6 +3,7 @@ name = "Snow"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Neve que cai e assenta em cima das janelas, dos ícones e da barra de tarefas; mexe uma janela e a neve que estava em cima cai. Passa o rato depressa para a varrer; clica para atirar uma bola de neve."
+description_en = "Snow that falls and settles on top of your windows, icons and taskbar; move a window and the snow on it falls. Move the mouse fast to sweep it; click to throw a snowball."
 category = "Ambiente"
 
 [render]

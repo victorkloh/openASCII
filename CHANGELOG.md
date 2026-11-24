@@ -2,6 +2,17 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-PT/).
 
+## [0.6.0] — 2026-11-24
+
+### Adicionado
+- **Idiomas: português e inglês.** Na primeira vez, antes de tudo, a app pergunta o idioma: Português (uma só opção para PT-PT e PT-BR, com a bandeira dividida na diagonal) ou English. O do Windows vem pré-selecionado. Muda-se nas Definições. Toda a interface está traduzida: launcher, menu da bandeja, primeiros passos, diálogos, menus, categorias e descrições dos wallpapers (`description_en` no manifest). Feito para crescer: os textos passam por `tr()` com o português como chave e cada idioma é uma tabela (`src/ui/lang/en.inc`).
+- **README em inglês** (`README.md`), com a versão portuguesa em `README.pt.md`.
+- `--lang <pt|en>` força o idioma (testes e capturas).
+- **Apagar wallpapers no launcher**: clique direito num wallpaper da lista abre um menu (aplicar, editar código, abrir a pasta, apagar). Apagar só existe para os que criaste e pede sempre confirmação, a avisar que não pode ser recuperado ("Não" por defeito). Se estava em uso, passa a outro; sai também da playlist e dos monitores.
+- **Modelo "em branco" a sério**: só um texto no centro do ecrã (muda-se em `text` no wallpaper.toml) e cinco efeitos em comentário (ondas do rato, chuva, estrelas, nuvens, cores) que se ligam apagando as `//`. Juntam-se uns aos outros, por isso podem estar todos ligados.
+- **Wallpaper diferente em cada monitor.** Na página de um wallpaper, em "monitores", escolhes os ecrãs que o mostram só para eles; os outros continuam com o wallpaper geral (e, com "Estender", partilham o efeito). Cada monitor tem o seu shader, caracteres, cores e entradas, e as Definições mostram o que cada um tem, com "Usar o geral" para voltar. Os monitores são reconhecidos pelo aparelho (não pelo DISPLAYn, que o Windows troca entre arranques), em `[monitors]` no config.toml.
+- **Menu simples no clique esquerdo do ícone da bandeja**: Abrir o OpenASCII (a ação por defeito, a negrito), Pausar/Retomar e Sair, no menu nativo do Windows. O painel completo (wallpapers, variantes, ajustes rápidos) passa para o clique direito.
+
 ## [0.5.0] — 2026-11-24
 
 Primeira versão pública. As versões até à 0.4.0 foram de desenvolvimento e não chegaram a ser publicadas.
@@ -134,4 +145,5 @@ Primeira versão alpha: **Fases 0 e 1** (esqueleto + integração com o desktop)
 - Tray: Pausar/Retomar, Abrir pasta de logs, Sair. `taskkill` sem `/f` sai de forma limpa.
 - Modo `--windowed` para desenvolvimento.
 - Testes unitários (doctest): geometria/coordenadas do ecrã virtual, DPI, política de pausas, argumentos.
+[0.6.0]: https://github.com/victorkloh/openASCII/releases/tag/v0.6.0
 [0.5.0]: https://github.com/victorkloh/openASCII/releases/tag/v0.5.0

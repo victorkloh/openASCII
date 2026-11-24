@@ -3,6 +3,7 @@ name = "Sandbox"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Areia, água e pedra a cair e a acumular. Pinta com o rato: botão esquerdo areia, direito água, o do meio pedra; os dois juntos apagam. Sem ninguém a mexer, umas bicas no topo vão enchendo o ecrã e o fundo esvazia-se devagar."
+description_en = "Sand, water and stone falling and piling up. Paint with the mouse: left button sand, right water, middle stone; both together erase. When nobody is around, spouts at the top keep filling the screen and the bottom slowly drains."
 category = "Simulações"
 
 [render]

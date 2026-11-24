@@ -3,6 +3,7 @@ name = "Planet"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Um planeta inventado a rodar, com continentes, nuvens, gelo e cidades acesas à noite, iluminado pelo Sol da estação do ano real. Passa o rato para o rodar."
+description_en = "A made-up planet spinning, with continents, clouds, ice and cities lit at night, lit by the Sun of the real season. Move the mouse to turn it."
 category = "3D e espaço"
 
 [render]

@@ -3,6 +3,7 @@ name = "Starfield"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Voo pelas estrelas; a posição do rato define a direção"
+description_en = "Flying through the stars; the mouse position sets the direction."
 category = "3D e espaço"
 
 [render]

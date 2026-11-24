@@ -3,6 +3,7 @@ name = "Life"
 author = "OpenASCII"
 version = "1.0.0"
 description = "O Jogo da Vida de Conway: células que nascem e morrem, com cor pela idade e rastos. Passa o rato para desenhar vida; clica para lançar planadores."
+description_en = "Conway's Game of Life: cells that are born and die, colored by age, with trails. Move the mouse to draw life; click to launch gliders."
 category = "Simulações"
 
 [render]

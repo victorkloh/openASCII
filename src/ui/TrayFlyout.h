@@ -18,11 +18,11 @@ public:
     void toggle(const RECT& anchorPx); // abre junto ao ícone da bandeja (ou fecha)
     void refresh();                    // o wallpaper ativo ou o estado mudou
     HRESULT renderToPng(const std::wstring& path);
+    void hide();
 
 private:
     void build(Ui& ui, float w, float h) override;
     bool handleMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) override;
-    void hide();
     void place(const RECT& anchorPx);
     float layoutHeight();
     float fixedHeight() const;       // tudo menos a grelha (layoutHeight e build usam a mesma conta)

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(OpenASCII
-    VERSION 0.5.0
+    VERSION 0.6.0
     DESCRIPTION "Motor de wallpapers ASCII reativos para Windows"
     LANGUAGES CXX RC)
 
@@ -86,6 +86,7 @@ add_executable(openascii WIN32
     src/render/ShaderCompiler.cpp
     src/ui/ConfirmDialog.cpp
     src/ui/Gfx.cpp
+    src/ui/I18n.cpp
     src/ui/Launcher.cpp
     src/ui/TrayFlyout.cpp
     src/ui/Ui.cpp

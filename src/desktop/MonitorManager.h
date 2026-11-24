@@ -13,6 +13,9 @@ namespace ap::desktop {
 struct MonitorInfo {
     HMONITOR handle = nullptr;
     std::wstring device; // ex.: L"\\\\.\\DISPLAY1" — estável enquanto o monitor estiver ligado
+    // Identificador do monitor físico (caminho do dispositivo): não muda entre arranques, ao
+    // contrário do DISPLAYn (o Windows troca-os). É a chave do wallpaper por monitor.
+    std::wstring id;
     Rect rect;           // em coordenadas de ecrã virtual (podem ser negativas)
     Rect work;           // área sem a barra de tarefas
     unsigned dpi = 96;   // 96 = 100%, 120 = 125%, 144 = 150%, 168 = 175%, 192 = 200%

@@ -3,6 +3,7 @@ name = "Valley"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Terrain vivo: chuva, nuvens com sombra, animais, pássaros, peixes, aldeias e um ciclo dia/noite. Clica para um relâmpago."
+description_en = "A living landscape: rain, clouds with shadows, animals, birds, fish, villages and a day/night cycle. Click for a lightning strike."
 category = "Paisagens"
 
 [render]

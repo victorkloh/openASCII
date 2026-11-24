@@ -3,6 +3,7 @@ name = "Aurora"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Aurora boreal sobre montanhas e um lago que a reflete. O rato agita as cortinas; clicar lança uma estrela cadente."
+description_en = "Northern lights over mountains and a lake that reflects them. The mouse stirs the curtains; click to launch a shooting star."
 category = "Paisagens"
 
 [render]

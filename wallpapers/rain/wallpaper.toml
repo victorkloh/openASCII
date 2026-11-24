@@ -3,6 +3,7 @@ name = "Rain"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Noite de chuva vista de uma janela embaciada, com a cidade desfocada lá fora. Arrasta o rato para desenhar no vidro."
+description_en = "A rainy night seen through a fogged-up window, with the blurry city outside. Drag the mouse to draw on the glass."
 category = "Ambiente"
 
 [render]

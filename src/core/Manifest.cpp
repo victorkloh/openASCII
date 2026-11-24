@@ -191,6 +191,14 @@ ManifestResult parseManifest(std::string_view text) {
             m.version = getString(*meta, "version").value_or("");
             m.description = getString(*meta, "description").value_or("");
             m.category = getString(*meta, "category").value_or("");
+        // Traduções da descrição: description_en = "...", description_es = "..." (o launcher mostra
+        // a do idioma da interface, ou `description` se não houver).
+        for (auto&& [key, node] : *meta) {
+            const std::string_view k = key.str();
+            if (k.size() > 12 && k.starts_with("description_")) {
+                if (auto s = node.value<std::string>()) m.descriptions[std::string(k.substr(12))] = *s;
+            }
+        }
         }
 
         const toml::table* render = root["render"].as_table();

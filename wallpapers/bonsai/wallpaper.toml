@@ -3,6 +3,7 @@ name = "Bonsai"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Um bonsai que cresce à tua frente em poucos minutos, diferente em cada dia, e muda com as estações do ano real. O rato faz vento nos ramos."
+description_en = "A bonsai that grows in front of you in a few minutes, different every day, and changes with the real seasons. The mouse blows wind through its branches."
 category = "Ambiente"
 
 [render]

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -49,11 +50,12 @@ struct Input {
     bool down = false;     // botão esquerdo premido
     bool pressed = false;  // foi premido neste evento
     bool released = false; // foi largado neste evento
+    bool rightReleased = false; // botão direito largado neste evento (menu de contexto)
     float wheel = 0.0f;    // entalhes (+ = para cima)
     std::wstring text;     // caracteres escritos
     bool backspace = false, enter = false, escape = false;
     void clearTransient() {
-        pressed = released = backspace = enter = escape = false;
+        pressed = released = rightReleased = backspace = enter = escape = false;
         wheel = 0.0f;
         text.clear();
     }
@@ -78,6 +80,7 @@ public:
 
     // ---- Desenho ----
     void fill(const R& r, D2D1_COLOR_F c, float radius = 0.0f);
+    void polygon(std::span<const D2D1_POINT_2F> points, D2D1_COLOR_F c); // bandeiras e afins
     void stroke(const R& r, D2D1_COLOR_F c, float radius = 0.0f, float width = 1.0f);
     void line(D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c, float width = 1.0f);
     void text(const R& r, std::wstring_view s, D2D1_COLOR_F c, const TextStyle& style = {});
@@ -93,6 +96,7 @@ public:
                 wchar_t iconGlyph = 0, bool enabled = true);
     bool iconButton(Id id, const R& r, wchar_t glyph, bool enabled = true);
     bool clickable(Id id, const R& r); // zona clicável sem desenho (o chamador desenha)
+    bool rightClicked(const R& r) const; // clique com o botão direito dentro de r (neste evento)
     bool hovered(const R& r) const { return mouseInside(r); }
     bool slider(Id id, const R& r, std::wstring_view label, float& value, float lo, float hi, float step,
                 std::wstring_view valueText);

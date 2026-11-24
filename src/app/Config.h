@@ -4,6 +4,7 @@
 // params...) chega na Fase 5.
 
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,11 @@ struct Config {
     std::vector<std::string> playlist; // nomes (ou caminhos) pela ordem
     int playlistMinutes = 0;           // 0 = desligada
     bool playlistShuffle = false;
+    // Wallpaper por monitor: identificador do monitor -> wallpaper. Os que não estão aqui usam
+    // o `wallpaper` geral.
+    std::map<std::string, std::string> monitorWallpapers;
+    // Idioma da interface ("pt", "en"...). Vazio = ainda não escolhido: a app pergunta ao arrancar.
+    std::string language;
     // Os "primeiros passos" já foram vistos (concluídos ou saltados). Em falta = mostrar.
     bool firstRunDone = false;
 

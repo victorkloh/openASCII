@@ -3,6 +3,7 @@ name = "Clock"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Um relógio grande em blocos, com a data e os segundos, sobre um fundo calmo. O rato faz brilhar os dígitos."
+description_en = "A big block clock with the date and seconds, over a calm background. The mouse makes the digits glow."
 category = "Dados e média"
 
 [render]

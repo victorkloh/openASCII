@@ -3,6 +3,7 @@ name = "Temple"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Um templo em 3D, em tempo real, com sombras suaves, nevoeiro e o sol a mover-se no céu. Passa o rato para rodar a câmara."
+description_en = "A 3D temple in real time, with soft shadows, fog and the sun moving across the sky. Move the mouse to turn the camera."
 category = "3D e espaço"
 
 [render]

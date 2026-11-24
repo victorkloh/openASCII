@@ -3,6 +3,7 @@ name = "Fluid"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Fumo colorido num fluido que se mexe como a sério. Arrasta o rato para o empurrar; clica para uma explosão. Sem ninguém a mexer, uns jatos mantêm-no em movimento."
+description_en = "Colored smoke in a fluid that moves like the real thing. Drag the mouse to push it; click for an explosion. When nobody is around, a few jets keep it moving."
 category = "Simulações"
 
 [render]

@@ -3,6 +3,7 @@ name = "Fire"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Fogo ASCII que sobe do fundo de cada ecrã. O rato acende chamas; clicar faz uma explosão."
+description_en = "ASCII fire rising from the bottom of each screen. The mouse lights flames; click for an explosion."
 category = "Retro"
 
 [render]

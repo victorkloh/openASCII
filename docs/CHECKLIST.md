@@ -113,6 +113,19 @@ Legenda: ✅ feito e verificado · 🟡 feito, falta verificação manual ou tem
 - ✅ `charset_only` ("Usar só estes caracteres"), ligado ao escolher um conjunto: cada sprite/caractere de texto passa a usar o caractere do conjunto mais parecido na forma (grelha 3x3) e na densidade. Os conjuntos aparecem também nos wallpapers que só usam caracteres próprios. As mensagens de erro ficam legíveis (cópias intactas no atlas). Os ajustes antigos com um conjunto escolhido passam a usá-lo em tudo.
 - ✅ Verificado fora do ecrã: aquário (binário, blocos, braille, caixas), relógio, neve, terminal, matrix e um wallpaper com erro.
 
+## 21. Descrições, primeiros passos, arranque rápido, nome OpenASCII, primeira release
+- ✅ Descrições dos 15 tech demos para quem usa a app.
+- ✅ Primeiros passos (4 passos) e arranque rápido (tarefa agendada por utilizador, sem admin).
+- ✅ Nome OpenASCII em tudo, com migração das definições antigas.
+- ✅ Publicado em github.com/victorkloh/openASCII; CI verde; tag v0.5.0 gerou o rascunho da release com instalador e zip.
+- ⏳ Publicar o rascunho da release (no GitHub, botão "Publish").
+
+## 22. "Fase 5: wallpaper diferente por monitor"
+- ✅ Cada monitor pode ter o seu wallpaper (shader, caracteres, cores e entradas próprios); os outros usam o geral. Escolha na página do wallpaper ("monitores") e nas Definições ("Usar o geral"). Monitores reconhecidos pelo aparelho.
+- ✅ Testado no ambiente de trabalho real: matrix só no monitor vertical, o principal com o geral; configuração reposta a seguir.
+- 🟡 A linha "monitores" do launcher não foi vista no ecrã (só existe no modo wallpaper; as capturas fora do ecrã usam o modo janela).
+- 🟡 Os wallpapers próprios ainda não têm hot reload nem ajustes ao vivo (aplicam-se ao recarregar).
+
 ## O que fica para depois (da spec original)
 - ⏳ Fase 4: backend Lua + natives (`fluid`, `particles`, `life`).
 - ⏳ Fase 5: wallpaper diferente por monitor; guia passo a passo no README já existe em `docs/CREATING_WALLPAPERS.md`.

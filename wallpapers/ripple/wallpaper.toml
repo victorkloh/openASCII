@@ -3,6 +3,7 @@ name = "Ripple"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Água ASCII: o rato deixa ondas, clicar cria uma onda forte"
+description_en = "ASCII water: the mouse leaves waves, clicking makes a strong ripple."
 category = "Ambiente"
 
 [render]

@@ -3,6 +3,7 @@ name = "Terrain"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Paisagem de ruído a deslizar devagar; o rato faz parallax"
+description_en = "A noise landscape sliding slowly; the mouse adds parallax."
 category = "Paisagens"
 
 [render]

@@ -32,6 +32,7 @@ private:
     float buildSettingsPage(Ui& ui, float x, float y, float w);
     void buildWelcome(Ui& ui, float w, float h); // primeiros passos (janela inteira, sem barra lateral)
     void finishWelcome();
+    void buildLanguageStep(Ui& ui, float x, float y, float cw, float h); // antes de tudo: o idioma
     float section(Ui& ui, float x, float y, float w, std::wstring_view title, std::wstring_view hint = {});
     void select(const std::wstring& base);
     void selectVariant(const std::filesystem::path& path);
@@ -51,6 +52,8 @@ private:
     std::wstring search_;     // pesquisa na lista de wallpapers
     bool cityLoaded_ = false;
     static constexpr UINT kMsgPickSource = WM_APP + 40; // abrir o diálogo de imagem/vídeo (fora da pintura)
+    static constexpr UINT kMsgContextMenu = WM_APP + 41; // menu do botão direito num wallpaper (wParam = item)
+    void showContextMenu(size_t item);
     std::wstring message_;    // feedback curto ("Tema guardado")
     std::wstring newName_;
     int templateIndex_ = -1;  // -1 = em branco

@@ -3,6 +3,7 @@ name = "Coral"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Corais, manchas e labirintos que crescem sozinhos e vão mudando de forma. Passa o rato para semear; clica para uma semente maior."
+description_en = "Coral, spots and mazes that grow by themselves and keep changing shape. Move the mouse to seed; click for a bigger seed."
 category = "Simulações"
 
 [render]

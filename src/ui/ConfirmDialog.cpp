@@ -1,13 +1,17 @@
 #include "ui/ConfirmDialog.h"
+#include "ui/I18n.h"
 
 namespace ap::ui {
+
+using i18n::tr;
+using i18n::trf;
 
 namespace {
 constexpr float kW = 460.0f, kH = 236.0f;
 }
 
 bool ConfirmDialog::create(HINSTANCE instance) {
-    return createWindow(instance, L"OpenASCIIDialog", L"OpenASCII", WS_POPUP, WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+    return createWindow(instance, tr(L"OpenASCIIDialog"), tr(L"OpenASCII"), WS_POPUP, WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
                         static_cast<int>(kW), static_cast<int>(kH), CS_DROPSHADOW);
 }
 
@@ -118,7 +122,7 @@ void ConfirmDialog::build(Ui& ui, float w, float h) {
     if (remember) ui.icon(box, L'\xE73E', t.onAccent, 11);
     TextStyle rs;
     rs.size = 12.5f;
-    ui.text(rect(pad + 26, by, 170, 34), L"Lembrar a escolha", t.muted, rs);
+    ui.text(rect(pad + 26, by, 170, 34), tr(L"Lembrar a escolha"), t.muted, rs);
     remember_ = remember;
 
     const float acceptW = std::max(120.0f, ui.textWidth(accept_, {}) + 32);

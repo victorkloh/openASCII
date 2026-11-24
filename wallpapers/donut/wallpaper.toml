@@ -3,6 +3,7 @@ name = "Donut"
 author = "OpenASCII"
 version = "1.0.0"
 description = "O donut 3D a girar, em homenagem ao clássico do terminal. O rato inclina-o; clicar dá-lhe um empurrão."
+description_en = "The spinning 3D donut, a tribute to the terminal classic. The mouse tilts it; click to give it a push."
 category = "3D e espaço"
 
 [render]

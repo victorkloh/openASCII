@@ -3,6 +3,7 @@ name = "Matrix"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Chuva de caracteres; as colunas desviam-se do cursor"
+description_en = "Character rain; the columns move out of the cursor's way."
 category = "Retro"
 
 [render]

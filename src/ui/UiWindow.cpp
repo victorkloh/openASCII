@@ -169,7 +169,7 @@ void UiWindow::paint() {
     }
     rt_->SetDpi(dpi, dpi);
     const Tokens t = theme();
-    const bool hadEvent = input_.pressed || input_.released || input_.wheel != 0 || !input_.text.empty() ||
+    const bool hadEvent = input_.pressed || input_.released || input_.rightReleased || input_.wheel != 0 || !input_.text.empty() ||
                           input_.backspace || input_.enter || input_.escape;
     rt_->BeginDraw();
     rt_->Clear(t.bg);
@@ -368,6 +368,11 @@ LRESULT UiWindow::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
         input_.mouse = toDip(lp);
         input_.down = false;
         input_.released = true;
+        invalidate();
+        return 0;
+    case WM_RBUTTONUP:
+        input_.mouse = toDip(lp);
+        input_.rightReleased = true;
         invalidate();
         return 0;
     case WM_MOUSEWHEEL:

@@ -86,6 +86,10 @@ ParseResult parseCommandLine(std::span<const std::wstring_view> args) {
             if (!v) return result;
             o.flyoutScreenshot = std::wstring(*v);
             o.windowed = true;
+        } else if (a == L"--lang") {
+            const auto* v = needValue(a);
+            if (!v) return result;
+            for (wchar_t c : *v) o.lang += static_cast<char>(c);
         } else if (a == L"--work-inset") {
             const auto* v = needValue(a);
             if (!v) return result;

@@ -46,6 +46,11 @@ Config Config::load() {
         c.playlistMinutes = std::clamp(static_cast<int>(t["playlist_minutes"].value_or(int64_t{0})), 0, 24 * 60);
         c.playlistShuffle = t["playlist_shuffle"].value_or(c.playlistShuffle);
         c.firstRunDone = t["first_run_done"].value_or(c.firstRunDone);
+        c.language = t["language"].value_or(c.language);
+        if (const toml::table* mons = t["monitors"].as_table()) {
+            for (auto&& [key, node] : *mons)
+                if (auto s = node.value<std::string>(); s && !s->empty()) c.monitorWallpapers[std::string(key.str())] = *s;
+        }
         if (const toml::array* list = t["playlist"].as_array()) {
             for (const auto& item : *list)
                 if (auto s = item.value<std::string>(); s && !s->empty()) c.playlist.push_back(*s);
@@ -77,10 +82,14 @@ bool Config::save() const {
         {"playlist_minutes", playlistMinutes},
         {"playlist_shuffle", playlistShuffle},
         {"first_run_done", firstRunDone},
+        {"language", language},
     };
     toml::array list;
     for (const auto& w : playlist) list.push_back(w);
     t.insert("playlist", std::move(list));
+    toml::table mons; // [monitors] "<identificador do monitor>" = "<wallpaper>"
+    for (const auto& [id, w] : monitorWallpapers) mons.insert(id, w);
+    if (!mons.empty()) t.insert("monitors", std::move(mons));
     std::ofstream out(file, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out << "# Configuração do OpenASCII (reescrita pela app ao escolher um wallpaper na tray)\n"
@@ -89,7 +98,8 @@ bool Config::save() const {
         << "# other_apps_on_start: \"ask\" | \"pause\" | \"ignore\"  (Wallpaper Engine, Lively)\n"
         << "# other_apps_on_exit:  \"ask\" | \"resume\" | \"keep\"\n"
         << "# weather_city: cidade para os wallpapers com tempo real (vazio = sem internet)\n"
-        << "# playlist: wallpapers a alternar; playlist_minutes: de quanto em quanto tempo (0 = desligada)\n\n"
+        << "# playlist: wallpapers a alternar; playlist_minutes: de quanto em quanto tempo (0 = desligada)\n"
+        << "# [monitors]: wallpaper próprio de cada monitor (os outros usam o geral)\n\n"
         << t << "\n";
     return static_cast<bool>(out);
 }

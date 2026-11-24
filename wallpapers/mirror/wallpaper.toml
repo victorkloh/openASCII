@@ -3,6 +3,7 @@ name = "Mirror"
 author = "OpenASCII"
 version = "1.0.0"
 description = "Tu em ASCII, ao vivo pela webcam. A câmara só liga se aceitares, e nada é gravado nem enviado. Mexe-te para saltarem faíscas."
+description_en = "You in ASCII, live from the webcam. The camera only turns on if you agree, and nothing is recorded or sent. Move to make sparks fly."
 category = "Dados e média"
 
 [render]

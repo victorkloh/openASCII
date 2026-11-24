@@ -8,6 +8,7 @@
 #include "resource.h"
 #include "ui/ConfirmDialog.h"
 #include "ui/Gfx.h"
+#include "ui/I18n.h"
 #include "ui/Launcher.h"
 #include "ui/TrayFlyout.h"
 #include "util/Log.h"
@@ -40,6 +41,7 @@ constexpr UINT WM_APP_TRAY = WM_APP + 10;
 constexpr UINT WM_APP_LOAD_DONE = WM_APP + 11; // terminou a compilação em segundo plano
 constexpr UINT WM_APP_MODAL_FRAME = WM_APP + 12; // é hora de um frame durante um loop modal
 constexpr UINT WM_APP_CHECK_ORDER = WM_APP + 13; // o Explorer mexeu nos filhos da anfitriã
+constexpr UINT WM_APP_EXTRA_LOAD_DONE = WM_APP + 14; // compilou o wallpaper próprio de um monitor
 
 enum TimerId : UINT_PTR {
     TIMER_LAYOUT = 1,      // mudança de monitores/DPI (com debounce)
@@ -86,7 +88,8 @@ bool samePath(const fs::path& a, const fs::path& b) {
     return !a.empty() && !b.empty() && fs::equivalent(a, b, ec);
 }
 
-// Modelo para "Novo wallpaper" em branco.
+// Modelo para "Novo wallpaper" em branco: só um texto no centro do ecrã, fácil de perceber e
+// de mudar, e cinco efeitos em comentário que se ligam tirando as // (somam-se uns aos outros).
 constexpr const char* kTemplateToml = R"toml([meta]
 name = "{NAME}"
 author = ""
@@ -97,36 +100,74 @@ description = "O meu wallpaper"
 mode = "shader"
 entry = "main.hlsl"
 fps = 30
-cell = 12
+cell = 14
 scale = 10
 font = "Cascadia Mono"
-charset = " .:-=+*#%@"
+charset = " .:-=+*#%@"   # do mais vazio ao mais cheio: os efeitos escolhem daqui
+
+[inputs]
+text = "Olá! Este é o teu wallpaper. Abre o main.hlsl desta pasta para o mudares."
 
 [colors]
 background = "#05070d"
 palette = ["#05070d", "#1e3a8a", "#38bdf8", "#e0f2fe"]
 
 [params]
-speed = { default = 1.0, min = 0.0, max = 4.0 }
+speed = { default = 1.0, min = 0.0, max = 4.0 }  # velocidade dos efeitos (aparece no launcher)
 )toml";
 
-constexpr const char* kTemplateHlsl = R"hlsl(// O meu wallpaper. Grava este ficheiro e o OpenASCII recarrega-o sozinho.
-// Guia: docs/CREATING_WALLPAPERS.md
+constexpr const char* kTemplateHlsl = R"hlsl(// O meu wallpaper. Grava este ficheiro e o OpenASCII recarrega-o sozinho, ao vivo.
+// Guia completo: CREATING_WALLPAPERS.md (na pasta da app ou no repositório).
+//
+// cell() corre para cada célula (cada caractere do ecrã), em cada frame. Devolve:
+//   o.value  0..1: escolhe o caractere do charset (0 = o primeiro, um espaço; 1 = o último)
+//   o.glyph  0 = usar o.value; asciiGlyph(c) ou textGlyph(k) = uma letra concreta
+//   o.fg     a cor da letra; o.bg a cor do fundo (0 = o "background" do wallpaper.toml)
 
 CellOut cell(CellIn i)
 {
-    // i.world e mouse.world estão em unidades de mundo: mudar a resolução da grelha
-    // não muda o tamanho do efeito.
-    float2 center = lerp(worldSize * 0.5, mouse.world, mouse.presence); // transição suave
-    float d = length(i.world - center);
-    float v = sin(d * 0.5 - time * 3.0 * param("speed")) * exp(-d * 0.03);
-
     CellOut o;
-    o.value = v * 0.5 + 0.5;
-    o.fg = palette(o.value);
+    o.value = 0;
+    o.glyph = 0;
+    o.fg = palette(1.0);
     o.bg = float4(0, 0, 0, 0);
     o.state = float4(0, 0, 0, 0);
-    o.glyph = 0;
+
+    float t = time * param("speed");
+    float v = 0;                          // intensidade: os efeitos juntam-se com max()
+    float3 tint = palette(0.66).rgb;      // a cor dos efeitos
+
+    // ---- Efeitos: tira as // do início de uma linha para a ligar. Podem estar todos ligados. ----
+
+    // 1) Ondas que saem do rato
+    // v = max(v, (sin(length(i.world - mouse.world) * 0.5 - t * 3.0) * 0.5 + 0.5) * exp(-length(i.world - mouse.world) * 0.03) * mouse.presence);
+
+    // 2) Chuva de caracteres, a cair em colunas
+    // v = max(v, pow(1.0 - frac(i.world.y / 80.0 - t * (0.05 + hash11(floor(i.world.x / 3.0)) * 0.1) + hash11(floor(i.world.x / 3.0) * 7.0)), 8.0));
+
+    // 3) Estrelas a piscar
+    // v = max(v, hash21(floor(i.world)) > 0.985 ? 0.5 + 0.5 * sin(t * 3.0 + hash21(floor(i.world)) * 50.0) : 0.0);
+
+    // 4) Nuvens de ruído a passar devagar
+    // v = max(v, fbm(i.world * 0.03 + float2(t * 0.15, 0)) * 0.7);
+
+    // 5) Cores que mudam com o tempo e de um lado ao outro do ecrã
+    // tint = palette(0.35 + 0.65 * frac(i.uv.x * 0.5 + t * 0.03)).rgb;
+
+    o.value = saturate(v);
+    o.fg = float4(tint * (0.35 + 0.65 * o.value), 1);
+
+    // ---- O texto: vem do "text" do wallpaper.toml, centrado no monitor principal ----
+    int2 c = int2(i.id);
+    int4 P = primaryWorkRect();          // o monitor principal, sem a barra de tarefas
+    int len = int(textLength);
+    int2 start = int2((P.x + P.z - len) / 2, (P.y + P.w) / 2);
+    int k = c.x - start.x;
+    if (c.y == start.y && k >= 0 && k < len)
+    {
+        o.glyph = textGlyph(uint(k));
+        o.fg = palette(1.0);
+    }
     return o;
 }
 )hlsl";
@@ -165,6 +206,9 @@ bool App::init() {
               options_.windowed ? L"janela" : L"wallpaper", static_cast<int>(awareness));
 
     config_ = Config::load();
+    // O idioma escolhido, ou o do Windows enquanto não houver escolha (a pergunta já aparece nele).
+    i18n::setLanguage(config_.language.empty() ? i18n::systemLanguage() : i18n::fromCode(config_.language));
+    if (!options_.lang.empty()) i18n::setLanguage(i18n::fromCode(options_.lang)); // --lang
     autostartCached_ = desktop::queryAutostart(); // a interface pede settings() em cada pintura
     settings_.maxFps = config_.maxFps;
     settings_.pause.pauseOnMaximized = config_.pauseOnMaximized;
@@ -221,11 +265,11 @@ bool App::init() {
         HRESULT hr = E_FAIL;
         if (gfx_ && !options_.uiScreenshot.empty() && options_.uiPage == 3) {
             // Página 3: a pergunta sobre o Wallpaper Engine (exemplo, sem a mostrar no ecrã).
-            dialog_->ask(L"Outra app de wallpaper está ativa",
-                         L"O Wallpaper Engine também desenha por trás dos ícones e pode aparecer por baixo do "
+            dialog_->ask(i18n::tr(L"Outra app de wallpaper está ativa"),
+                         i18n::tr(L"O Wallpaper Engine também desenha por trás dos ícones e pode aparecer por baixo do "
                          L"OpenASCII. Pausá-lo enquanto o OpenASCII estiver a correr?\n\nAs definições e os "
-                         L"wallpapers dele não mudam; volta quando saíres.",
-                         L"Pausar", L"Agora não", ui::accentFromPalette(wallpaper_.manifest.palette), nullptr);
+                         L"wallpapers dele não mudam; volta quando saíres."),
+                         i18n::tr(L"Pausar"), i18n::tr(L"Agora não"), ui::accentFromPalette(wallpaper_.manifest.palette), nullptr);
             ShowWindow(dialog_->hwnd(), SW_HIDE);
             hr = dialog_->renderToPng(options_.uiScreenshot);
         } else if (gfx_ && !options_.uiScreenshot.empty()) {
@@ -296,8 +340,17 @@ bool App::init() {
     checkOtherApps();
     schedulePlaylist();
     // Primeira vez: o launcher abre nos "primeiros passos" (preferências e arranque com o Windows).
-    if (options_.openLauncher || (!config_.firstRunDone && !benchmarking_)) openLauncher();
+    if (options_.openLauncher || ((!config_.firstRunDone || config_.language.empty()) && !benchmarking_)) openLauncher();
     return true;
+}
+
+void App::setLanguageCode(const std::string& code) {
+    config_.language = code;
+    config_.save();
+    i18n::setLanguage(i18n::fromCode(code));
+    log::info(L"Idioma da interface: {}", widen(code));
+    if (flyout_ && flyout_->isVisible()) flyout_->invalidate();
+    if (launcher_ && launcher_->isVisible()) launcher_->invalidate();
 }
 
 void App::finishFirstRun() {
@@ -315,6 +368,7 @@ void App::shutdown() {
     stopFrameTimer();
     watcher_.stop();
     inputs_.stop();
+    extras_.clear(); // para as entradas deles (e espera por compilações a meio)
     if (pendingLoad_.valid()) pendingLoad_.wait();
     dialog_.reset();
     launcher_.reset();
@@ -674,6 +728,8 @@ void App::applyLoadJob(LoadJob job) {
     if (flyout_ && flyout_->isVisible()) flyout_->refresh(); // escondido: atualiza ao abrir
     if (launcher_ && launcher_->isVisible()) launcher_->refresh();
     const LONGLONG t3 = qpcNow();
+    // Um monitor cujo wallpaper próprio é agora o geral deixa de precisar de um à parte.
+    if (!surfaces_.empty()) syncExtras();
     // Tudo isto corre no thread que desenha o wallpaper: o tempo total é um frame atrasado.
     auto ms = [this](LONGLONG a, LONGLONG b) { return (b - a) * 1000.0 / static_cast<double>(qpcFrequency_); };
     log::info(L"Troca aplicada em {:.1f} ms (shader {:.1f}, superfícies {:.1f}, interface {:.1f})", ms(t0, t3),
@@ -688,11 +744,11 @@ void App::configureInputs() {
     inputs_.configure(wallpaper_.manifest, wallpaper_.dir, s, gfx_ ? gfx_->wic() : nullptr);
     if (!inputs_.webcamConsentNeeded() || !dialog_ || benchmarking_ || !options_.screenshot.empty()) return;
     // A webcam só liga com um "sim" explícito (o Windows mostra que a câmara está em uso).
-    dialog_->ask(L"Este wallpaper usa a webcam",
-                 L"Mostra-te em ASCII no fundo do ecrã, ao vivo. A imagem nunca sai do teu PC: nada é "
+    dialog_->ask(i18n::tr(L"Este wallpaper usa a webcam"),
+                 i18n::tr(L"Mostra-te em ASCII no fundo do ecrã, ao vivo. A imagem nunca sai do teu PC: nada é "
                  L"gravado nem enviado.\n\nO Windows indica que a câmara está ligada enquanto este "
-                 L"wallpaper estiver ativo.",
-                 L"Ligar a webcam", L"Agora não", ui::accentFromPalette(wallpaper_.manifest.palette),
+                 L"wallpaper estiver ativo."),
+                 i18n::tr(L"Ligar a webcam"), i18n::tr(L"Agora não"), ui::accentFromPalette(wallpaper_.manifest.palette),
                  [this](bool accepted, bool remember) {
                      if (!accepted) return;
                      webcamAllowedSession_ = true;
@@ -912,6 +968,66 @@ void App::openInEditor(const fs::path& wallpaperPath) {
     }
 }
 
+bool App::deleteWallpaper(const fs::path& path, std::wstring& error) {
+    std::error_code ec;
+    // A pasta do wallpaper (um tema vive em <wallpaper>/themes/<tema>.toml).
+    fs::path dir = fs::is_directory(path, ec) ? path : path.parent_path();
+    if (dir.filename() == L"themes") dir = dir.parent_path();
+    const fs::path root = wallpaper::userWallpaperDir();
+    const fs::path rel = fs::relative(dir, root, ec);
+    if (ec || rel.empty() || rel.native().starts_with(L"..") || samePath(dir, root)) {
+        error = L"Só podes apagar os wallpapers que criaste (os que vêm com a app não).";
+        return false;
+    }
+    auto inside = [&](const fs::path& p) {
+        if (p.empty()) return false;
+        const fs::path r = fs::relative(p, dir, ec);
+        return !ec && !r.empty() && !r.native().starts_with(L"..");
+    };
+    const std::string key = wallpaper::wallpaperKey(dir);
+    log::info(L"A apagar o wallpaper {}", dir.wstring());
+
+    // A playlist e os monitores deixam de o usar.
+    std::erase_if(config_.playlist, [&](const std::string& w) { return w == key || w.rfind(key + "/", 0) == 0; });
+    std::erase_if(config_.monitorWallpapers, [&](const auto& kv) {
+        return kv.second == key || kv.second.rfind(key + "/", 0) == 0;
+    });
+    // Em uso: largar a pasta (o hot reload tem-na aberta) e passar a outro wallpaper.
+    const bool active = inside(wallpaperPath_);
+    if (active) watcher_.stop();
+    wallpaper::saveOverrides(key, Theme{}); // os ajustes guardados dele (ficheiro vazio = apagado)
+    fs::remove_all(dir, ec);
+    if (ec) {
+        error = L"Não consegui apagar a pasta (" + widen(ec.message()) + L"). Está aberta noutro programa?";
+        config_.save();
+        return false;
+    }
+    if (active) {
+        fs::path next = wallpaper::resolveWallpaper(L"ripple");
+        if (next.empty()) {
+            const auto all = wallpaper::listWallpapers();
+            if (!all.empty()) next = all.front().path;
+        }
+        if (!next.empty()) {
+            activate(next); // grava a config
+        } else {
+            // Era o último: o fundo do Windows volta a ver-se até criares outro.
+            config_.wallpaper.clear();
+            config_.save();
+            hasWallpaper_ = false;
+            errorText_.clear();
+            for (auto& s : surfaces_)
+                if (s->hwnd()) ShowWindow(s->hwnd(), SW_HIDE);
+            updatePause();
+        }
+    } else {
+        config_.save();
+    }
+    syncExtras();
+    schedulePlaylist();
+    return true;
+}
+
 void App::openFolder(const fs::path& path) {
     std::error_code ec;
     const fs::path dir = fs::is_directory(path, ec) ? path : path.parent_path();
@@ -1047,12 +1163,14 @@ std::wstring App::lastError() const { return widen(errorText_); }
 int App::effectiveFps() const {
     // Um FPS fixo escolhido pelo utilizador vale sempre; o limite aplica-se ao automático.
     if (config_.fps > 0) return std::clamp(config_.fps, 1, 240);
-    const int wanted = hasWallpaper_ ? wallpaper_.manifest.fps : 30;
+    int wanted = hasWallpaper_ ? wallpaper_.manifest.fps : 30;
+    for (const auto& [id, e] : extras_) // com wallpapers por monitor, o mais exigente manda
+        if (e->has) wanted = std::max(wanted, e->wallpaper.manifest.fps);
     return std::clamp(wanted, 1, std::max(1, config_.maxFps));
 }
 
 std::wstring App::otherAppsStatus() const {
-    return suspendedApps_.empty() ? L"" : desktop::describeApps(suspendedApps_) + L" em pausa";
+    return suspendedApps_.empty() ? L"" : desktop::describeApps(suspendedApps_) + i18n::tr(L" em pausa");
 }
 
 void App::suspendApps(const std::vector<desktop::OtherWallpaperApp>& apps) {
@@ -1083,12 +1201,12 @@ void App::checkOtherApps() {
         if (config_.otherAppsOnStart == "pause") suspendApps(apps);
         return;
     }
-    dialog_->ask(L"Outra app de wallpaper está ativa",
-                 std::format(L"O {} também desenha por trás dos ícones e pode aparecer por baixo do OpenASCII. "
+    dialog_->ask(i18n::tr(L"Outra app de wallpaper está ativa"),
+                 i18n::trf(L"O {} também desenha por trás dos ícones e pode aparecer por baixo do OpenASCII. "
                              L"Pausá-lo enquanto o OpenASCII estiver a correr?\n\nAs definições e os wallpapers "
                              L"dele não mudam; volta quando saíres.",
                              names),
-                 L"Pausar", L"Agora não", hasWallpaper_ ? ui::accentFromPalette(wallpaper_.manifest.palette) : Rgba8{},
+                 i18n::tr(L"Pausar"), i18n::tr(L"Agora não"), hasWallpaper_ ? ui::accentFromPalette(wallpaper_.manifest.palette) : Rgba8{},
                  [this, apps](bool accepted, bool remember) {
                      if (accepted) suspendApps(apps);
                      if (remember) {
@@ -1103,9 +1221,9 @@ void App::quit() {
     if (!suspendedApps_.empty() && config_.otherAppsOnExit == "ask" && dialog_) {
         quitting_ = true;
         const std::wstring names = desktop::describeApps(suspendedApps_);
-        dialog_->ask(L"Retomar o " + names + L"?",
-                     L"O OpenASCII vai fechar. Queres que o " + names + L" volte a correr como estava?",
-                     L"Retomar", L"Deixar pausado",
+        dialog_->ask(i18n::trf(L"Retomar o {}?", names),
+                     i18n::trf(L"O OpenASCII vai fechar. Queres que o {} volte a correr como estava?", names),
+                     i18n::tr(L"Retomar"), i18n::tr(L"Deixar pausado"),
                      hasWallpaper_ ? ui::accentFromPalette(wallpaper_.manifest.palette) : Rgba8{},
                      [this](bool accepted, bool remember) {
                          if (!accepted) suspendedApps_.clear(); // não retomar no shutdown()
@@ -1139,16 +1257,47 @@ void App::showTrayFlyout() {
     flyout_->toggle(anchor);
 }
 
+void App::showTrayMenu() {
+    // Clique esquerdo: um menu simples do Windows (como o de outras apps da bandeja). O menu
+    // detalhado, com os wallpapers e os ajustes, fica no clique direito.
+    if (flyout_ && flyout_->isVisible()) flyout_->hide();
+    enum : UINT { kOpen = 1, kPause, kQuit };
+    HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING, kOpen, i18n::tr(L"Abrir o OpenASCII"));
+    SetMenuDefaultItem(menu, kOpen, FALSE); // em negrito, como o "Open Sunshine"
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kPause, pause_.global.user ? i18n::tr(L"Retomar") : i18n::tr(L"Pausar"));
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kQuit, i18n::tr(L"Sair"));
+    POINT pt{};
+    GetCursorPos(&pt);
+    SetForegroundWindow(controller_); // sem isto o menu não fecha ao clicar fora
+    setModalLoop(true);               // o fundo continua a desenhar com o menu aberto
+    const UINT cmd = static_cast<UINT>(TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY |
+                                                                TPM_BOTTOMALIGN | TPM_RIGHTALIGN,
+                                                      pt.x, pt.y, 0, controller_, nullptr));
+    setModalLoop(false);
+    PostMessageW(controller_, WM_NULL, 0, 0);
+    DestroyMenu(menu);
+    switch (cmd) {
+    case kOpen: openLauncher(); break;
+    case kPause: setPaused(!pause_.global.user); break;
+    case kQuit: quit(); break;
+    default: break;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Render
 // ---------------------------------------------------------------------------
 
 HRESULT App::prepareSurface(render::MonitorSurface& s) {
-    if (!s.hasSwapChain() || !hasWallpaper_) return E_FAIL;
-    const Manifest& m = wallpaper_.manifest;
+    const ExtraWallpaper* extra = extraFor(s); // wallpaper próprio deste monitor (se tiver)
+    if (!s.hasSwapChain() || (!hasWallpaper_ && !extra)) return E_FAIL;
+    const Manifest& m = extra ? extra->wallpaper.manifest : wallpaper_.manifest;
     render::AtlasDesc desc;
     desc.font = widen(m.font);
-    desc.fontDir = wallpaper_.dir;
+    desc.fontDir = extra ? extra->wallpaper.dir : wallpaper_.dir;
     desc.weight = m.fontWeight;
     desc.cellHeightPx = scaleByDpi(m.cell, s.monitor.dpi ? s.monitor.dpi : 96);
     desc.charset = m.charset;
@@ -1166,12 +1315,15 @@ void App::prepareAllSurfaces() {
 }
 
 void App::rebuildCanvases() {
-    std::vector<render::MonitorSurface*> ready;
+    // Os monitores com wallpaper próprio têm sempre um canvas só deles; os outros partilham o
+    // wallpaper geral (num só canvas estendido, ou um cada).
+    std::vector<render::MonitorSurface*> ready, own;
     for (auto& s : surfaces_) {
         s->canvas = nullptr;
-        if (s->hasSwapChain() && s->atlas.valid()) ready.push_back(s.get());
+        if (!s->hasSwapChain() || !s->atlas.valid()) continue;
+        (extraFor(*s) ? own : ready).push_back(s.get());
     }
-    if (ready.empty()) {
+    if (ready.empty() && own.empty()) {
         canvases_.clear();
         return;
     }
@@ -1182,12 +1334,13 @@ void App::rebuildCanvases() {
         return CanvasMonitor{s->monitor.rect, s->grid.layout(), work};
     };
     const bool span = config_.spanMonitors && !options_.windowed && ready.size() > 1;
-    const size_t count = span ? 1 : ready.size();
+    const size_t count = (span ? 1 : ready.size()) + own.size();
     if (canvases_.size() != count) {
         canvases_.clear();
         mouseTracks_.clear();
         for (size_t i = 0; i < count; ++i) canvases_.push_back(std::make_unique<render::CellCanvas>());
     }
+    size_t next = 0;
     if (span) {
         std::vector<CanvasMonitor> ms;
         size_t primary = 0;
@@ -1197,12 +1350,145 @@ void App::rebuildCanvases() {
         }
         canvases_[0]->resize(device_.device(), computeSpanCanvas(ms, primary));
         for (auto* s : ready) s->canvas = canvases_[0].get();
+        next = 1;
     } else {
-        for (size_t i = 0; i < ready.size(); ++i) {
-            canvases_[i]->resize(device_.device(), computeSingleCanvas(monitorOf(ready[i])));
-            ready[i]->canvas = canvases_[i].get();
+        for (auto* s : ready) {
+            canvases_[next]->resize(device_.device(), computeSingleCanvas(monitorOf(s)));
+            s->canvas = canvases_[next++].get();
         }
     }
+    for (auto* s : own) {
+        canvases_[next]->resize(device_.device(), computeSingleCanvas(monitorOf(s)));
+        s->canvas = canvases_[next++].get();
+    }
+}
+
+App::ExtraWallpaper* App::extraFor(const render::MonitorSurface& s) const {
+    if (s.monitor.id.empty()) return nullptr;
+    const auto it = extras_.find(s.monitor.id);
+    return it != extras_.end() && it->second->has ? it->second.get() : nullptr;
+}
+
+App::ExtraWallpaper* App::extraForCanvas(const render::CellCanvas& canvas) const {
+    const render::MonitorSurface* ref = referenceSurface(canvas);
+    return ref ? extraFor(*ref) : nullptr;
+}
+
+const Manifest& App::manifestFor(const render::MonitorSurface& s) const {
+    const ExtraWallpaper* e = extraFor(s);
+    return e ? e->wallpaper.manifest : wallpaper_.manifest;
+}
+
+void App::syncExtras() {
+    if (options_.windowed || exiting_) return;
+    std::set<std::wstring> wanted;
+    bool changed = false;
+    for (const auto& s : surfaces_) {
+        const auto it = config_.monitorWallpapers.find(narrow(s->monitor.id));
+        if (s->monitor.id.empty() || it == config_.monitorWallpapers.end()) continue;
+        const fs::path path = wallpaper::resolveWallpaper(widen(it->second));
+        if (path.empty() || samePath(path, wallpaperPath_)) continue; // igual ao geral: não precisa
+        wanted.insert(s->monitor.id);
+        auto& e = extras_[s->monitor.id];
+        if (e && samePath(e->path, path)) continue;
+        if (!e) {
+            e = std::make_unique<ExtraWallpaper>();
+        } else if (e->has) {
+            e->has = false; // troca: até o novo compilar, este monitor mostra o geral
+            changed = true;
+        }
+        e->path = path;
+        log::info(L"Monitor {}: wallpaper próprio {} (a preparar)", s->monitor.device, path.filename().wstring());
+        const HWND notify = controller_;
+        e->pending = std::async(std::launch::async, [path, notify] {
+            LoadJob job = runLoadJob(path);
+            PostMessageW(notify, WM_APP_EXTRA_LOAD_DONE, 0, 0);
+            return job;
+        });
+    }
+    for (auto it = extras_.begin(); it != extras_.end();) {
+        if (wanted.contains(it->first)) {
+            ++it;
+            continue;
+        }
+        changed = changed || it->second->has;
+        it = extras_.erase(it); // monitor desligado ou de volta ao wallpaper geral
+    }
+    if (changed) refreshAfterWallpaperChange();
+}
+
+void App::onExtraLoaded() {
+    bool any = false;
+    for (auto& [id, e] : extras_) {
+        if (!e->pending.valid() || e->pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready) continue;
+        LoadJob job = e->pending.get();
+        if (!samePath(job.path, e->path)) continue; // pedido antigo (entretanto mudou)
+        std::string error = !job.load.error.empty() ? job.load.error : job.shader.ok() ? "" : job.shader.errors;
+        if (error.empty() && FAILED(e->program.create(device_.device(), job.shader.blob.Get()))) {
+            error = "CreateComputeShader falhou (ver log)";
+        }
+        if (job.load.error.empty()) {
+            e->wallpaper = job.load.wallpaper;
+            e->has = true;
+        }
+        e->error = error;
+        if (!error.empty()) log::error(L"Wallpaper do monitor ({}): {}", job.path.wstring(), widen(error));
+        else log::info(L"Wallpaper próprio pronto: {}", widen(e->wallpaper.label));
+        if (e->has) {
+            inputs::InputSettings s;
+            s.weatherCity = widen(config_.weatherCity);
+            s.windowsWallpaper = g_originalWallpaper;
+            s.webcamAllowed = config_.webcamAllowed || webcamAllowedSession_;
+            e->inputs.configure(e->wallpaper.manifest, e->wallpaper.dir, s, gfx_ ? gfx_->wic() : nullptr);
+        }
+        any = true;
+    }
+    if (any) refreshAfterWallpaperChange();
+}
+
+void App::refreshAfterWallpaperChange() {
+    canvases_.clear(); // o estado de uma simulação não passa para outro wallpaper
+    mouseTracks_.clear();
+    settings_.fps = effectiveFps();
+    prepareAllSurfaces();
+    rebuildCanvases();
+    renderAllNow();
+    stopFrameTimer();
+    updatePause();
+    if (launcher_ && launcher_->isVisible()) launcher_->invalidate();
+}
+
+std::vector<ui::MonitorChoice> App::monitorChoices() {
+    std::vector<ui::MonitorChoice> out;
+    if (options_.windowed) return out;
+    // Numerados da esquerda para a direita (e de cima para baixo), como nas Definições do Windows.
+    std::vector<const render::MonitorSurface*> sorted;
+    for (const auto& s : surfaces_) sorted.push_back(s.get());
+    std::sort(sorted.begin(), sorted.end(), [](const auto* a, const auto* b) {
+        return a->monitor.rect.left != b->monitor.rect.left ? a->monitor.rect.left < b->monitor.rect.left
+                                                            : a->monitor.rect.top < b->monitor.rect.top;
+    });
+    for (size_t i = 0; i < sorted.size(); ++i) {
+        const auto& m = sorted[i]->monitor;
+        ui::MonitorChoice c;
+        c.id = m.id;
+        c.primary = m.primary;
+        c.label = std::format(L"Monitor {}{} · {}×{}", i + 1, m.primary ? L" (principal)" : L"", m.rect.width(),
+                              m.rect.height());
+        if (const auto it = config_.monitorWallpapers.find(narrow(m.id)); it != config_.monitorWallpapers.end()) {
+            c.wallpaper = wallpaper::resolveWallpaper(widen(it->second));
+        }
+        out.push_back(std::move(c));
+    }
+    return out;
+}
+
+void App::setMonitorWallpaper(const std::wstring& id, const fs::path& path) {
+    const std::string key = narrow(id);
+    if (path.empty() || samePath(path, wallpaperPath_)) config_.monitorWallpapers.erase(key);
+    else config_.monitorWallpapers[key] = wallpaper::wallpaperKey(path);
+    config_.save();
+    syncExtras();
 }
 
 render::MonitorSurface* App::referenceSurface(const render::CellCanvas& canvas) const {
@@ -1219,7 +1505,7 @@ wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const
                                          double time, double dt) const {
     wallpaper::FrameConstants f{};
     const CanvasLayout& c = canvas.layout();
-    const Manifest& m = wallpaper_.manifest;
+    const Manifest& m = manifestFor(ref); // o do monitor, se tiver wallpaper próprio
     const float cw = static_cast<float>(c.cellW), ch = static_cast<float>(c.cellH);
 
     f.time = static_cast<float>(time);
@@ -1301,15 +1587,15 @@ wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const
     return f;
 }
 
-void App::drawError(render::CellCanvas& canvas, const render::MonitorSurface& ref) {
+void App::drawError(render::CellCanvas& canvas, const render::MonitorSurface& ref, const std::string& text) {
     // No canto superior esquerdo do monitor de referência.
     const Point p0 = canvasCellFor(canvas.layout(), CanvasMonitor{ref.monitor.rect, ref.grid.layout()}, 0, 0);
     const int col = std::max(0, p0.x) + 1;
     const int row = std::max(0, p0.y) + 1;
     const Rgba8 fg{255, 120, 120, 255}, bg{24, 4, 6, 235}, dim{200, 200, 210, 255};
     canvas.writeText(device_.context(), ref.atlas, col, row,
-                     " OpenASCII: erro no wallpaper (o último estado bom continua) ", dim, bg);
-    std::istringstream lines(errorText_);
+                     win::toUtf8(i18n::tr(L" OpenASCII: erro no wallpaper (o último estado bom continua) ")), dim, bg);
+    std::istringstream lines(text);
     std::string line;
     int r = row + 1;
     while (std::getline(lines, line) && r < row + 13) {
@@ -1322,23 +1608,28 @@ void App::computeCanvas(render::CellCanvas& canvas, double time, double dt) {
     render::MonitorSurface* ref = referenceSurface(canvas);
     if (!ref || !canvas.valid()) return;
     auto* ctx = device_.context();
-    if (program_.valid()) {
+    // O wallpaper deste canvas: o próprio do monitor, ou o geral.
+    ExtraWallpaper* extra = extraForCanvas(canvas);
+    wallpaper::ShaderProgram& program = extra ? extra->program : program_;
+    inputs::InputHub& hub = extra ? extra->inputs : inputs_;
+    const std::string& error = extra ? extra->error : errorText_;
+    if (program.valid()) {
         wallpaper::FrameConstants f = makeFrame(canvas, *ref, time, dt);
-        const wallpaper::ShaderInputs in = inputs_.bind(device_.device(), ctx, &canvas, canvas.layout(), f);
-        program_.dispatch(ctx, canvas, f, in);
+        const wallpaper::ShaderInputs in = hub.bind(device_.device(), ctx, &canvas, canvas.layout(), f);
+        program.dispatch(ctx, canvas, f, in);
         // O clique foi entregue: os frames seguintes (e renderAllNow) já não o repetem.
         if (auto it = mouseTracks_.find(&canvas); it != mouseTracks_.end()) it->second.clickPending = false;
     } else {
         canvas.clear(ctx);
     }
-    if (!errorText_.empty()) drawError(canvas, *ref);
+    if (!error.empty()) drawError(canvas, *ref, error);
 }
 
 HRESULT App::drawSurface(render::MonitorSurface& s, bool present) {
     if (!s.hasSwapChain() || !s.canvas || !s.atlas.valid()) return S_OK;
     auto* ctx = device_.context();
     s.grid.draw(device_.device(), ctx, pipeline_, s.rtv(), s.atlas, *s.canvas, s.monitor.rect,
-                wallpaper_.manifest.background, wallpaper_.manifest.post, static_cast<float>(now()));
+                manifestFor(s).background, manifestFor(s).post, static_cast<float>(now()));
     if (captureRequested_) {
         // Antes do Present: com o flip model o back buffer fica indefinido depois.
         captureRequested_ = false;
@@ -1366,11 +1657,20 @@ HRESULT App::presentSurface(render::MonitorSurface& s) {
     return hr;
 }
 
+void App::updateInputs(double t) {
+    if (const auto* atlas = referenceAtlas()) inputs_.update(device_.device(), device_.context(), t, *atlas);
+    // Cada wallpaper próprio tem as suas entradas (texto e imagem com o atlas do seu monitor).
+    for (const auto& s : surfaces_) {
+        if (ExtraWallpaper* e = extraFor(*s); e && s->atlas.valid())
+            e->inputs.update(device_.device(), device_.context(), t, s->atlas);
+    }
+}
+
 void App::renderAllNow() {
     if (canvases_.empty()) return;
     const double dt = 1.0 / std::clamp(settings_.fps, 1, 240);
     const double t = now();
-    if (const auto* atlas = referenceAtlas()) inputs_.update(device_.device(), device_.context(), t, *atlas);
+    updateInputs(t);
     for (auto& c : canvases_) computeCanvas(*c, t, dt);
     for (auto& s : surfaces_) {
         const HRESULT hr = drawSurface(*s);
@@ -1464,7 +1764,7 @@ void App::renderFrame() {
         }
     }
 
-    if (const auto* atlas = referenceAtlas()) inputs_.update(device_.device(), device_.context(), t, *atlas);
+    updateInputs(t);
 
     // 1) Simular cada canvas que tenha pelo menos um monitor visível (uma vez por frame,
     //    mesmo que cubra vários monitores). 2) Cada monitor ativo desenha a sua parte.
@@ -1550,6 +1850,7 @@ bool App::attachDesktop() {
                                               pid, 0, WINEVENT_OUTOFCONTEXT));
     }
     checkDesktopOrder();
+    syncExtras(); // wallpapers próprios de cada monitor (compilam em segundo plano)
     updatePause();
     return true;
 }
@@ -1677,6 +1978,7 @@ void App::syncLayout() {
         }
     }
     checkDesktopOrder();
+    syncExtras(); // um monitor que voltou recupera o seu wallpaper
     updatePause();
 }
 
@@ -1745,6 +2047,10 @@ void App::handleDeviceLost(HRESULT hr) {
     canvases_.clear();
     program_.releaseDeviceObjects();
     inputs_.releaseDeviceObjects();
+    for (auto& [id, e] : extras_) {
+        e->program.releaseDeviceObjects();
+        e->inputs.releaseDeviceObjects();
+    }
     pipeline_.reset();
     device_.reset();
     if (!recreateDeviceResources()) {
@@ -1761,6 +2067,8 @@ bool App::recreateDeviceResources() {
         log::warn(L"Não consegui recriar o compute shader; a recompilar");
         loadWallpaperSync(wallpaperPath_);
     }
+    for (auto& [id, e] : extras_)
+        if (e->has && FAILED(e->program.recreate(device_.device()))) e->error = "CreateComputeShader falhou (ver log)";
     for (auto& s : surfaces_) {
         if (!s->hwnd()) continue;
         RECT rc{};
@@ -1929,10 +2237,12 @@ LRESULT App::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_APP_TRAY:
         switch (LOWORD(lp)) {
-        case WM_CONTEXTMENU:
-        case NIN_SELECT:
-        case NIN_KEYSELECT:
+        case WM_CONTEXTMENU: // clique direito: o menu detalhado (wallpapers, ajustes)
             showTrayFlyout();
+            break;
+        case NIN_SELECT: // clique esquerdo (e Enter): o menu simples
+        case NIN_KEYSELECT:
+            showTrayMenu();
             break;
         default:
             break;
@@ -1958,6 +2268,9 @@ LRESULT App::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_APP_CHECK_ORDER:
         checkDesktopOrder();
+        return 0;
+    case WM_APP_EXTRA_LOAD_DONE:
+        onExtraLoaded();
         return 0;
 
     case render::WM_APP_SURFACE_LOST:

@@ -1,6 +1,8 @@
 #include "ui/TrayFlyout.h"
+#include "ui/I18n.h"
 
 #include "ui/Labels.h"
+#include "ui/I18n.h"
 #include "util/Win32.h"
 
 #include <algorithm>
@@ -8,6 +10,9 @@
 #include <format>
 
 namespace ap::ui {
+
+using i18n::tr;
+using i18n::trf;
 
 // O menu da bandeja tem um só trabalho: trocar o que está atrás das janelas depressa. Por
 // isso as miniaturas são o conteúdo principal e tudo o resto é discreto:
@@ -54,7 +59,7 @@ float rowHeight() { return thumbHeight() + 4.0f + kLabelH + kGridGap; }
 
 bool TrayFlyout::create(HINSTANCE instance) {
     // CS_DROPSHADOW: sombra do sistema; WS_EX_TOOLWINDOW: fora da barra de tarefas e do Alt+Tab.
-    if (!createWindow(instance, L"OpenASCIIFlyout", L"OpenASCII", WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+    if (!createWindow(instance, tr(L"OpenASCIIFlyout"), tr(L"OpenASCII"), WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
                       static_cast<int>(kWidth), 420, CS_DROPSHADOW)) {
         return false;
     }
@@ -245,17 +250,17 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
     TextStyle title;
     title.size = 14.0f;
     title.weight = DWRITE_FONT_WEIGHT_SEMI_BOLD;
-    ui.text(rect(kPad + 30, y, 140, kHeaderH), L"OpenASCII", t.text, title);
+    ui.text(rect(kPad + 30, y, 140, kHeaderH), tr(L"OpenASCII"), t.text, title);
     const R pauseBtn = rect(w - kPad - 28, y, 28, 28);
     if (ui.iconButton(makeId(L"pause"), pauseBtn, paused ? L'\xE768' : L'\xE769')) app_.setPaused(!paused);
     TextStyle status = eyebrowStyle();
     status.align = DWRITE_TEXT_ALIGNMENT_TRAILING;
-    ui.text(rect(pauseBtn.left - 118, y, 100, kHeaderH), paused ? L"em pausa" : L"a correr", t.faint, status);
+    ui.text(rect(pauseBtn.left - 118, y, 100, kHeaderH), paused ? tr(L"em pausa") : tr(L"a correr"), t.faint, status);
     ui.fill(rect(pauseBtn.left - 14, y + 10, 8, 8), paused ? t.faint : t.accent, 4);
     y += kHeaderH + kHeaderGap;
 
     // ---- Wallpapers: grelha com scroll ----
-    ui.text(rect(kPad, y, w - 2 * kPad, kEyebrowH), eyebrowText(L"wallpapers"), t.faint, eyebrowStyle());
+    ui.text(rect(kPad, y, w - 2 * kPad, kEyebrowH), eyebrowText(tr(L"wallpapers")), t.faint, eyebrowStyle());
     TextStyle count = eyebrowStyle();
     count.align = DWRITE_TEXT_ALIGNMENT_TRAILING;
     ui.text(rect(kPad, y, w - 2 * kPad, kEyebrowH), std::to_wstring(bases_.size()), t.faint, count);
@@ -285,7 +290,7 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
         empty.size = 12.5f;
         empty.wrap = true;
         empty.valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
-        ui.text(rect(kPad, y, w - 2 * kPad, gridH), L"Ainda não há wallpapers. Em Personalizar podes criar o primeiro.",
+        ui.text(rect(kPad, y, w - 2 * kPad, gridH), tr(L"Ainda não há wallpapers. Em Personalizar podes criar o primeiro."),
                 t.muted, empty);
     }
     for (size_t k = 0; k < bases_.size(); ++k) {
@@ -305,7 +310,7 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
             ui.fill(thumb, D2D1_COLOR_F{t.bg.r, t.bg.g, t.bg.b, 0.72f}, 6);
             TextStyle ls = eyebrowStyle();
             ls.align = DWRITE_TEXT_ALIGNMENT_CENTER;
-            ui.text(thumb, std::wstring(L"a preparar ") + kSpin[(GetTickCount64() / 120) % 4], t.text, ls);
+            ui.text(thumb, std::wstring(tr(L"a preparar ")) + kSpin[(GetTickCount64() / 120) % 4], t.text, ls);
         }
         if (isActive) ui.stroke(inset(thumb, -2, -2), t.accent, 8, 2);
         else if (over) ui.stroke(inset(thumb, -1.5f, -1.5f), t.border, 7.5f, 1.5f);
@@ -340,7 +345,7 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
             const auto& v = items_[i];
             if (v.base != base) continue;
             ++total;
-            const std::wstring label = v.theme.empty() ? L"original" : v.theme;
+            const std::wstring label = v.theme.empty() ? tr(L"original") : v.theme;
             const float cw = ui.textWidth(label, cs) + 22;
             if (x + cw > w - kPad - 40) continue; // deixa lugar para "+N"
             const bool sel = samePath(v.path, activePath);
@@ -350,7 +355,7 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
             ++shown;
         }
         if (shown < total &&
-            ui.chip(makeId(L"variant-more"), rect(x, y, 36, kVariantsH), std::format(L"+{}", total - shown), false)) {
+            ui.chip(makeId(L"variant-more"), rect(x, y, 36, kVariantsH), trf(L"+{}", total - shown), false)) {
             hide();
             app_.openLauncher();
         }
@@ -368,7 +373,7 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
         }
         TextStyle ls;
         ls.size = 13.0f;
-        ui.text(rect(kPad, y, 200, kDisclosureH), L"Ajustes rápidos", over ? t.text : t.muted, ls);
+        ui.text(rect(kPad, y, 200, kDisclosureH), tr(L"Ajustes rápidos"), over ? t.text : t.muted, ls);
         ui.icon(rect(w - kPad - 20, y, 20, kDisclosureH), adjustOpen_ ? L'\xE70D' : L'\xE76C', t.faint, 10);
         y += kDisclosureH;
     }
@@ -382,15 +387,15 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
             if (p) {
                 float v = p->value;
                 if (ui.slider(makeId(L"quick-speed"), rect(kPad, y, w - 2 * kPad, 40), paramLabel(p->name), v, p->min,
-                              p->max, (p->max - p->min) / 100.0f, std::format(L"{:.2f}", v))) {
+                              p->max, (p->max - p->min) / 100.0f, trf(L"{:.2f}", v))) {
                     editor_.setParam(p->name, v);
                     changed = true;
                 }
             }
             y += kSliderH;
             float cell = static_cast<float>(editor_.effective.cell);
-            if (ui.slider(makeId(L"quick-cell"), rect(kPad, y, w - 2 * kPad, 40), L"Resolução da grelha", cell, 4, 32,
-                          1, std::format(L"{} px", static_cast<int>(cell)))) {
+            if (ui.slider(makeId(L"quick-cell"), rect(kPad, y, w - 2 * kPad, 40), tr(L"Resolução da grelha"), cell, 4, 32,
+                          1, trf(L"{} px", static_cast<int>(cell)))) {
                 editor_.draft.cell = static_cast<int>(cell);
                 changed = true;
             }
@@ -404,12 +409,12 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
         GlobalSettings gs = app_.settings();
         TextStyle ls;
         ls.size = 12.0f;
-        ui.text(rect(kPad, y, 40, 28), L"FPS", t.muted, ls);
+        ui.text(rect(kPad, y, 40, 28), tr(L"FPS"), t.muted, ls);
         static constexpr int kChoices[] = {0, 15, 30, 60, 120};
         float cx = kPad + 40;
         for (int k = 0; k < static_cast<int>(std::size(kChoices)); ++k) {
             const int v = kChoices[k];
-            const std::wstring label = v == 0 ? L"auto" : std::to_wstring(v);
+            const std::wstring label = v == 0 ? tr(L"auto") : std::to_wstring(v);
             const float cw = ui.textWidth(label, ls) + 22;
             if (ui.chip(makeId(L"flyout-fps", k), rect(cx, y, cw, 28), label, gs.fps == v) && gs.fps != v) {
                 gs.fps = v;
@@ -435,11 +440,11 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
     ui.line({kPad, y + 6}, {w - kPad, y + 6}, t.border);
     y += 16;
     const float bw = (w - 2 * kPad - 8) / 2;
-    if (ui.button(makeId(L"customize"), rect(kPad, y, bw, 34), L"Personalizar", ButtonKind::Ghost, L'\xE713')) {
+    if (ui.button(makeId(L"customize"), rect(kPad, y, bw, 34), tr(L"Personalizar"), ButtonKind::Ghost, L'\xE713')) {
         hide();
         app_.openLauncher();
     }
-    if (ui.button(makeId(L"quit"), rect(kPad + bw + 8, y, bw, 34), L"Sair", ButtonKind::Ghost, L'\xE7E8')) {
+    if (ui.button(makeId(L"quit"), rect(kPad + bw + 8, y, bw, 34), tr(L"Sair"), ButtonKind::Ghost, L'\xE7E8')) {
         hide();
         app_.quit();
     }

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <future>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -74,6 +75,7 @@ public:
     bool createWallpaper(const std::wstring& name, const std::filesystem::path& templatePath,
                          std::filesystem::path& created, std::wstring& error) override;
     void openInEditor(const std::filesystem::path& wallpaperPath) override;
+    bool deleteWallpaper(const std::filesystem::path& path, std::wstring& error) override;
     void openFolder(const std::filesystem::path& path) override;
     std::vector<std::wstring> monospaceFonts() override;
     bool paused() const override { return pause_.global.user; }
@@ -91,7 +93,11 @@ public:
     std::filesystem::path loadingPath() const override { return queuedLoad_.empty() ? loadingPath_ : queuedLoad_; }
     void setModalLoop(bool active) override;
     bool firstRunPending() const override { return !config_.firstRunDone; }
+    bool languagePending() const override { return config_.language.empty(); }
+    void setLanguageCode(const std::string& code) override;
     void finishFirstRun() override;
+    std::vector<ui::MonitorChoice> monitorChoices() override;
+    void setMonitorWallpaper(const std::wstring& id, const std::filesystem::path& path) override;
 
 private:
     using WinEventHook = wil::unique_any<HWINEVENTHOOK, decltype(&::UnhookWinEvent), ::UnhookWinEvent>;
@@ -106,6 +112,25 @@ private:
     };
     static LoadJob runLoadJob(std::filesystem::path path);
 
+    // Wallpaper por monitor: um monitor com wallpaper próprio tem o seu programa, as suas
+    // entradas e um canvas só dele. Os outros continuam com o wallpaper geral (wallpaper_).
+    struct ExtraWallpaper {
+        std::filesystem::path path;
+        wallpaper::LoadedWallpaper wallpaper;
+        wallpaper::ShaderProgram program;
+        bool has = false;  // tem um manifest utilizável
+        std::string error; // erro do shader (mostrado no próprio monitor)
+        inputs::InputHub inputs;
+        std::future<LoadJob> pending;
+    };
+    ExtraWallpaper* extraFor(const render::MonitorSurface& s) const; // só se já carregado
+    ExtraWallpaper* extraForCanvas(const render::CellCanvas& canvas) const;
+    const Manifest& manifestFor(const render::MonitorSurface& s) const;
+    void syncExtras();    // aplica config_.monitorWallpapers aos monitores ligados
+    void onExtraLoaded(); // WM_APP_EXTRA_LOAD_DONE
+    void refreshAfterWallpaperChange();
+    void updateInputs(double t); // as entradas do wallpaper geral e as de cada wallpaper próprio
+
     bool init();
     void shutdown();
     bool createController();
@@ -113,7 +138,8 @@ private:
     LRESULT onMessage(UINT msg, WPARAM wp, LPARAM lp);
     void onTimer(UINT_PTR id);
     static void CALLBACK onWinEvent(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD);
-    void showTrayFlyout();
+    void showTrayFlyout(); // clique direito no ícone: o menu detalhado
+    void showTrayMenu();   // clique esquerdo: o menu simples (abrir, pausar, sair)
 
     // Wallpaper
     void loadWallpaperSync(const std::filesystem::path& path);
@@ -155,7 +181,7 @@ private:
     HRESULT presentSurface(render::MonitorSurface& s);
     wallpaper::FrameConstants makeFrame(const render::CellCanvas& canvas, const render::MonitorSurface& ref,
                                         double time, double dt) const;
-    void drawError(render::CellCanvas& canvas, const render::MonitorSurface& ref);
+    void drawError(render::CellCanvas& canvas, const render::MonitorSurface& ref, const std::string& text);
     void armFrameTimer(bool restart);
     void renderIfDue(); // desenha um frame se o timer já disparou (sem esperar pelo loop)
     void onModalFrame(); // WM_APP_MODAL_FRAME: a espera do threadpool viu o timer disparar
@@ -212,6 +238,7 @@ private:
     std::future<LoadJob> pendingLoad_;
     std::filesystem::path loadingPath_; // a compilar agora (vazio = nada)
     std::filesystem::path queuedLoad_;  // pedido feito durante uma compilação (o mais recente)
+    std::map<std::wstring, std::unique_ptr<ExtraWallpaper>> extras_; // por MonitorInfo::id
     bool queuedForce_ = false;          // o pedido em fila é um hot reload (corre mesmo se for o atual)
     std::vector<std::wstring> fontCache_;
     inputs::InputHub inputs_;

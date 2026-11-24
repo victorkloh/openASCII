@@ -208,6 +208,19 @@ void Ui::fill(const R& r, D2D1_COLOR_F c, float radius) {
     else rt_->FillRectangle(r, brush(c));
 }
 
+void Ui::polygon(std::span<const D2D1_POINT_2F> points, D2D1_COLOR_F c) {
+    if (points.size() < 3) return;
+    ComPtr<ID2D1Factory> factory;
+    rt_->GetFactory(&factory);
+    ComPtr<ID2D1PathGeometry> geometry;
+    ComPtr<ID2D1GeometrySink> sink;
+    if (FAILED(factory->CreatePathGeometry(&geometry)) || FAILED(geometry->Open(&sink))) return;
+    sink->BeginFigure(points[0], D2D1_FIGURE_BEGIN_FILLED);
+    sink->AddLines(points.data() + 1, static_cast<UINT32>(points.size() - 1));
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    if (SUCCEEDED(sink->Close())) rt_->FillGeometry(geometry.Get(), brush(c));
+}
+
 void Ui::stroke(const R& r, D2D1_COLOR_F c, float radius, float w) {
     const R s = inset(r, w / 2, w / 2); // traço por dentro do retângulo
     if (radius > 0) rt_->DrawRoundedRectangle({s, radius, radius}, brush(c), w);
@@ -323,6 +336,13 @@ void Ui::drawFocusRing(const R& r, float radius) { stroke(inset(r, -2, -2), with
 // ---------------------------------------------------------------------------
 // Widgets
 // ---------------------------------------------------------------------------
+
+bool Ui::rightClicked(const R& r) const {
+    if (in_->rightReleased && mouseInside(r)) {
+        return true;
+    }
+    return false;
+}
 
 bool Ui::clickable(Id id, const R& r) {
     const bool over = mouseInside(r);

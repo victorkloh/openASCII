@@ -1,6 +1,8 @@
 # OpenASCII
 
-**Wallpapers ASCII animados e interativos para Windows 10/11**, desenhados atrás dos ícones do ambiente de trabalho. Um único `.exe` nativo e pequeno (C++20, Win32, Direct3D 11), sem browser embutido nem runtime pesado. Cada wallpaper é programável e fácil de partilhar.
+***English** · [Português](README.pt.md)*
+
+**Animated, interactive ASCII wallpapers for Windows 10/11**, drawn behind your desktop icons. A single small native `.exe` (C++20, Win32, Direct3D 11), with no embedded browser and no heavy runtime. Every wallpaper is programmable and easy to share. The app speaks English and Portuguese.
 
 | synthwave | aurora | aquarium |
 |---|---|---|
@@ -8,132 +10,126 @@
 | **valley** | **clock** | **fire** |
 | ![valley](wallpapers/valley/preview.png) | ![clock](wallpapers/clock/preview.png) | ![fire](wallpapers/fire/preview.png) |
 
-> **Estado: alpha (v0.5.0), a primeira versão pública.** O motor, 28 wallpapers, o launcher, o menu da bandeja e o instalador estão feitos. Os wallpapers programados em Lua chegam numa versão futura. Ver o [roadmap](#roadmap).
+> **Status: alpha.** The engine, 28 wallpapers, the launcher, the tray menu and the installer are done. Wallpapers scripted in Lua will come in a future version. See the [roadmap](#roadmap).
 
-## Efeitos incluídos
+## Included wallpapers
 
-| Wallpaper | Interação | Variantes |
+| Wallpaper | Interaction | Variants |
 |---|---|---|
-| **synthwave** | pôr do sol retro, sol às riscas, montanhas néon, grelha infinita; o rato move a câmara | `vapor` |
-| **aurora** | aurora boreal sobre montanhas e lago; o rato agita as cortinas; clicar lança uma estrela cadente | `crimson` |
-| **rain** | janela de noite de chuva com a cidade desfocada; passar/arrastar o rato limpa o vidro embaciado | `neon` |
-| **aquarium** | peixes, bolhas, algas e areia; os peixes fogem do rato; clicar deixa cair comida | `abyss` |
-| **clock** | relógio grande em blocos, com data em português e barra dos segundos | `amber` (12 h) |
-| **fire** | fogo ASCII clássico a subir do fundo de cada ecrã; o rato acende chamas; clicar explode | `spirit` |
-| **fireworks** | fogo de artifício sobre a cidade, com rastos; clicar lança um foguete | `gold` |
-| **donut** | o donut 3D do terminal, por raymarching; o rato inclina-o; clicar dá-lhe um empurrão | `sprinkles` |
-| **valley** | mapa vivo: chuvadas, nuvens com sombra, manadas que fogem do rato, pássaros em V, peixes, aldeias que acendem à noite, ciclo dia/noite; clicar faz cair um relâmpago | `autumn`, `miniature` |
-| **ripple** | o rato deixa ondas na água; clicar atira uma pedra; chove de vez em quando | `ember`, `blocks` |
-| **matrix** | chuva de caracteres; as colunas desviam-se do cursor | `amber`, `binary` |
-| **terrain** | paisagem de ruído a deslizar devagar; o rato faz parallax entre terra e nuvens | `desert`, `topo` |
-| **starfield** | voo pelas estrelas; o rato define a direção | `warp`, `braille` |
+| **synthwave** | retro sunset, striped sun, neon mountains, endless grid; the mouse moves the camera | `vapor`, `beat` |
+| **aurora** | northern lights over mountains and a lake; the mouse stirs the curtains; click for a shooting star | `crimson` |
+| **rain** | a rainy night through a fogged-up window; drag the mouse to draw on the glass | `neon` |
+| **aquarium** | fish, bubbles, seaweed and sand; fish swim away from the mouse; click to drop food | `abyss` |
+| **clock** | a big block clock with the date and a seconds bar | `amber` (12 h) |
+| **fire** | classic ASCII fire rising from the bottom of each screen; the mouse lights flames; click to explode | `spirit` |
+| **fireworks** | fireworks over the city, with trails; click to launch one | `gold` |
+| **donut** | the spinning 3D terminal donut, raymarched; the mouse tilts it; click to push it | `sprinkles` |
+| **valley** | a living map: rain, clouds with shadows, herds fleeing the mouse, birds, fish, villages lighting up at night, day/night cycle; click for lightning | `autumn`, `miniature`, `weather` |
+| **ripple** | the mouse leaves ripples on the water; click to throw a stone | `ember`, `blocks` |
+| **matrix** | character rain; the columns avoid the cursor | `amber`, `binary`, `code` |
+| **terrain** | a slowly sliding noise landscape; the mouse adds parallax | `desert`, `topo` |
+| **starfield** | flying through the stars; the mouse sets the direction | `warp`, `braille` |
 
-**Tech demos (v0.5)**: um wallpaper por capacidade do motor, comentados para servirem de exemplo a quem cria os seus (ver `docs/CREATING_WALLPAPERS.md`, secção 6).
+**Tech demos**: one wallpaper per engine feature, commented so they work as examples for your own (see `docs/CREATING_WALLPAPERS.md`, section 6).
 
-| Wallpaper | O que mostra |
+| Wallpaper | What it shows |
 |---|---|
-| **photo** | a tua imagem, GIF ou vídeo em ASCII a cores, com contornos; lupa no rato (por defeito, o teu wallpaper do Windows) |
-| **spectrum** | o som que está a tocar: anel de frequências, barras com picos, ondas de choque na batida |
-| **snow** | neve que assenta em cima das janelas, dos ícones e da barra de tarefas, e cai quando as mexes |
-| **temple** | cena 3D em tempo real (raymarching) com sombras suaves e nevoeiro; o rato roda a câmara |
-| **sandbox** | areia, água e pedra a cair; pintas com o rato (esquerdo areia, direito água, meio pedra) |
-| **fluid** | fluido incompressível a sério (24 passos por frame); arrasta-o com o rato |
-| **coral** / **life** | reação-difusão (corais e labirintos) e o Jogo da Vida com cor e rastos |
-| **fractal** | zoom sem fim no Mandelbrot, a visitar pontos famosos |
-| **hud** | hora, CPU, RAM e o tempo lá fora (cidade nas Definições), com brilho de ecrã |
-| **planet** | planeta procedural com nuvens, cidades à noite e o Sol da estação do ano real |
-| **bonsai** | uma árvore que cresce devagar, diferente cada dia, que muda com as estações |
-| **mirror** | tu em ASCII pela webcam (só liga se aceitares); mexe-te e saltam faíscas |
-| **terminal** | monitor CRT antigo a escrever citações (edita `quotes.txt`) |
-| **arcade** | Breakout que joga sozinho; com o rato no fundo, a raquete é tua |
+| **photo** | your image, GIF or video in color ASCII with outlines; a magnifier under the mouse |
+| **spectrum** | the sound playing on your PC: frequency ring, bars with peaks, shock waves on every beat |
+| **snow** | snow that settles on your windows, icons and taskbar, and falls when you move them |
+| **temple** | a real-time 3D scene (raymarching) with soft shadows and fog; the mouse turns the camera |
+| **sandbox** | falling sand, water and stone you paint with the mouse |
+| **fluid** | a real incompressible fluid (24 steps per frame); drag it with the mouse |
+| **coral** / **life** | reaction-diffusion (coral and mazes) and the Game of Life with color and trails |
+| **fractal** | an endless zoom into the Mandelbrot set |
+| **hud** | time, CPU, RAM and the weather outside (city in Settings) |
+| **planet** | a procedural planet with clouds, cities at night and the Sun of the real season |
+| **bonsai** | a tree that grows slowly, different every day, changing with the seasons |
+| **mirror** | you in ASCII from the webcam (only if you allow it) |
+| **terminal** | an old CRT monitor typing quotes (edit `quotes.txt`) |
+| **arcade** | a Breakout that plays itself; with the mouse on the desktop, the paddle is yours |
 
-Temas novos que ligam entradas: `synthwave/beat` (reage à música), `valley/weather` (tempo real), `matrix/code` (o código dos próprios wallpapers).
+**Many monitors, one effect.** With "Span across all monitors" (on by default) the wallpaper runs on one canvas covering every screen, like Windows' Extend mode: a wave leaving one monitor enters the next.
 
-**Vários monitores = um só efeito.** Com "Estender por todos os monitores" (ligado por defeito), o wallpaper corre numa única tela que cobre todos os ecrãs, como o modo Estender do Windows: uma onda que sai de um monitor entra no outro, os animais do valley atravessam de um ecrã para o outro.
+**Or a different wallpaper on each monitor.** On a wallpaper's page, under "monitors", pick the screens that get it just for them; the others keep the main one. Monitors are recognized by the device, so your choice survives Windows renumbering the screens.
 
-## Menu da bandeja e launcher
+## Tray menu and launcher
 
-| Menu da bandeja | Launcher |
+| Tray menu | Launcher |
 |---|---|
 | ![menu](docs/img/flyout.png) | ![launcher](docs/img/launcher.png) |
 
-- **Menu da bandeja** (clique no ícone): escolher o wallpaper e a variante, ajustar a velocidade e a resolução da grelha, pausar, abrir o launcher, sair.
-- **Launcher** (Personalizar): para cada wallpaper, as variantes, a **resolução da grelha** (tamanho dos caracteres) e a **escala do efeito** (tamanho da paisagem/ondas, independente da resolução), FPS, fonte, cores (com seletor de cor), caracteres e todos os parâmetros próprios. As alterações aparecem ao vivo e ficam guardadas; "Guardar como tema" cria uma variante nova. Também cria wallpapers novos a partir de um modelo e abre o código no teu editor.
-- **Definições**: modo estendido, rato só no desktop ou em todo o lado, regras de pausa, limite de FPS, iniciar com o Windows.
+- **Tray icon**: left-click for a short menu (open OpenASCII, pause, quit); right-click for the full tray menu: pick the wallpaper and variant, adjust speed and grid resolution, pause, open the launcher, quit.
+- **Launcher** (Customize): for each wallpaper, the variants, **grid resolution** (character size) and **effect scale**, FPS, font, colors, characters, screen effects (CRT, neon, cinema) and all its own parameters, live. "Save as theme" creates a new variant. Right-click a wallpaper to apply it, edit its code, open its folder or delete it (only the ones you created; it always asks first). You can also create new wallpapers from a template, which opens the code in your editor.
+- **Settings**: language, monitors and mouse, pause rules, FPS, start with Windows, wallpaper inputs, playlist, other wallpaper apps.
 
-A interface segue o tema claro/escuro do Windows e usa como cor de destaque a cor do wallpaper ativo.
+The interface follows Windows' light/dark theme and uses the active wallpaper's color as its accent.
 
-## O que a app faz por ti
+## What the app does for you
 
-- Fica **atrás dos ícones** no Windows 10, 11 e 11 24H2+; os ícones continuam clicáveis.
-- **Vários monitores**, com DPIs diferentes e em coordenadas negativas. O texto é rasterizado no tamanho exato de cada monitor: nunca fica desfocado.
-- **Pausa automática (0% de CPU)** por monitor: jogo ou vídeo em ecrã inteiro, janela maximizada, ecrã bloqueado, suspensão, poupança de bateria.
-- **Só reage ao rato quando está sobre o desktop**: clicar num browser não faz ondas.
-- Recupera sozinha se o **Explorer** reiniciar ou o **driver da GPU** reiniciar.
-- **Ao sair, repõe o wallpaper original** do Windows.
+- Stays **behind the icons** on Windows 10, 11 and 11 24H2+; icons stay clickable.
+- **Multiple monitors** with different DPIs and negative coordinates; text is rasterized at each monitor's exact size, never blurry.
+- **Automatic pause (0% CPU)** per monitor: fullscreen game or video, maximized window, locked screen, sleep, battery saver.
+- **Only reacts to the mouse over the desktop**: clicking in a browser doesn't make ripples.
+- Recovers by itself if **Explorer** or the **GPU driver** restarts, and puts itself back on top if Windows Spotlight reshuffles the desktop.
+- **Restores your original wallpaper** when it quits.
+- **Gets along with Wallpaper Engine and Lively**: it can pause them while it runs and resume them when it quits.
 
-Medido (Release, RTX 4060, 2 monitores, valley a 30 fps): **0,7% de CPU**, GPU 0,19 ms por frame, 0 engasgos com o rato a mexer, ~26 MB de RAM por monitor.
+Measured (Release, RTX 4060, 2 monitors, valley at 30 fps): **0.7% CPU**, 0.19 ms of GPU per frame, ~26 MB of RAM per monitor.
 
-- **FPS do fundo** à tua escolha (automático ou 15–144), no menu da bandeja e nas Definições.
-- **O rato não custa nada:** é lido uma vez por frame (sem mensagens por cada movimento) e só conta sobre o ambiente de trabalho; quando sai, os efeitos voltam suavemente ao repouso.
-- **Convive com o Wallpaper Engine e o Lively:** ao arrancar pergunta se os pausa (com os comandos deles, sem mexer nas definições) e ao sair pergunta se os retoma.
+## Install and use
 
-## Instalar e usar
+The [Releases](../../releases) page has two options, neither needs admin rights:
 
-Na página de [Releases](../../releases) há duas formas, ambas sem permissões de administrador:
+**Installer (recommended): `OpenASCII-<version>-setup.exe`**
+1. Run it. It installs to `%LOCALAPPDATA%\Programs\OpenASCII`, just for your user.
+2. Choose **full** (the app and the 28 built-in wallpapers) or **app only** (no wallpapers; your Windows background stays visible until you create one).
+3. Leave **Start OpenASCII with Windows** checked if you want it always on. You can change it later in Settings.
+4. At the end the launcher opens. The Start menu shortcut opens it too, even while the app is running.
 
-**Instalador (recomendado): `OpenASCII-<versão>-setup.exe`**
-1. Corre o instalador. Fica em `%LOCALAPPDATA%\Programs\OpenASCII`, só para o teu utilizador.
-2. Escolhe o que instalar: **completa** (a app e os 28 wallpapers predefinidos) ou **só a app**, sem nenhum wallpaper pronto a usar. Neste caso, o fundo do Windows fica à vista até criares o teu primeiro wallpaper no launcher.
-3. Deixa marcado **Iniciar o OpenASCII com o Windows** se o quiseres sempre ligado. Podes mudar isto depois nas Definições.
-4. No fim, o launcher abre. O atalho do Menu Iniciar também o abre, mesmo com a app já a correr.
+To uninstall: Windows Settings › Apps. The app is closed first and your original wallpaper comes back. Your settings and the wallpapers you created are only deleted if you say so.
 
-Para desinstalar: Definições do Windows › Aplicações. A app é fechada primeiro e o teu wallpaper original volta. As tuas definições e os wallpapers que criaste só são apagados se disseres que sim.
+**Portable: `OpenASCII-<version>-win64.zip`**: extract it and run `openascii.exe`; turn on starting with Windows in Settings.
 
-**Portátil: `OpenASCII-<versão>-win64.zip`**
-1. Extrai o zip para uma pasta e corre `openascii.exe`.
-2. Para arrancar com o Windows, liga a opção nas Definições do launcher.
+On first launch the app asks for the **language** (English or Portuguese) and then shows **first steps**: performance (FPS, pauses, multiple monitors) and starting with Windows. **Fast start** uses a per-user scheduled task instead of the Windows startup list, which delays apps by a few seconds. No app can start before you sign in, but when the PC is locked OpenASCII stays open, paused, so the wallpaper is already there when you unlock.
 
-Na primeira vez, o launcher abre nos **primeiros passos**: desempenho (FPS, pausas, vários monitores) e arranque com o Windows. No arranque com o Windows há a opção **Arranque rápido**, que usa uma tarefa agendada só para a tua conta, em vez da lista de arranque do Windows (que atrasa as apps uns segundos). Nenhuma app consegue arrancar antes de iniciares sessão, mas com o PC bloqueado o OpenASCII continua aberto, em pausa: ao desbloquear, o wallpaper já lá está.
+Windows SmartScreen may warn ("Windows protected your PC") because the executable isn't signed yet: **More info › Run anyway**. The release's `SHA256SUMS.txt` lets you check the files (`Get-FileHash <file>`).
 
-Em ambos os casos, o ícone aparece na área de notificação (junto ao relógio, talvez escondido na seta **^**). Clica nele para escolher o wallpaper, pausar, abrir o launcher ou sair. Ao sair, o teu wallpaper original volta.
+### Command line
 
-O Windows SmartScreen pode avisar ("O Windows protegeu o PC"), porque o executável ainda não está assinado: **Mais informações › Executar mesmo assim**. O `SHA256SUMS.txt` da release serve para confirmar que o ficheiro não foi alterado (`Get-FileHash <ficheiro>`).
-
-### Linha de comandos
-
-| Opção | Descrição |
+| Option | Description |
 |---|---|
-| `--windowed` | Renderiza numa janela normal (para desenvolver sem mexer no desktop) |
-| `--wallpaper <nome ou pasta>` | Usa um wallpaper (`ripple`, uma pasta, ou um tema `.toml`) |
-| `--bench <segundos>` | Mede frame time médio/p99, CPU e RAM e sai |
-| `--screenshot <ficheiro.png>` | Renderiza 3 s fora do ecrã, grava um PNG e sai |
-| `--launcher` | Abre o launcher ao arrancar |
-| `--work-inset <px>` | Com `--windowed`: simula uma barra de tarefas de `<px>` em baixo (para testar o que fica no fundo do ecrã) |
-| `--verbose`, `-v` | Logs detalhados, também na consola |
-| `--help`, `-h` | Ajuda |
+| `--windowed` | Render in a normal window (to develop without touching the desktop) |
+| `--wallpaper <name or folder>` | Use a wallpaper (`ripple`, a folder, or a `.toml` theme) |
+| `--bench <seconds>` | Measure average/p99 frame time, CPU and RAM, then quit |
+| `--screenshot <file.png>` | Render 3 s off-screen, save a PNG and quit |
+| `--launcher` | Open the launcher on start |
+| `--lang <pt\|en>` | Force the interface language (for tests and screenshots) |
+| `--work-inset <px>` | With `--windowed`: simulate a taskbar of `<px>` at the bottom |
+| `--verbose`, `-v` | Detailed logs, also in the console |
+| `--help`, `-h` | Help |
 
-### Ficheiros
+### Files
 
-| Onde | O quê |
+| Where | What |
 |---|---|
-| `%APPDATA%\OpenASCII\config.toml` | wallpaper escolhido, `interaction`, `max_fps`, `span_monitors`, regras de pausa (o launcher escreve-o por ti) |
-| `%APPDATA%\OpenASCII\overrides\` | os teus ajustes por wallpaper (cores, resolução, parâmetros...), no formato de tema |
-| `%APPDATA%\OpenASCII\wallpapers\` | os teus wallpapers (além dos que vêm ao lado do `.exe`) |
-| `%APPDATA%\OpenASCII\log.txt` | log (roda acima de 1 MB) |
+| `%APPDATA%\OpenASCII\config.toml` | chosen wallpaper, language, per-monitor wallpapers, pause rules... (the launcher writes it for you) |
+| `%APPDATA%\OpenASCII\overrides\` | your per-wallpaper tweaks (colors, resolution, parameters...), in theme format |
+| `%APPDATA%\OpenASCII\wallpapers\` | your own wallpapers (besides the ones next to the `.exe`) |
+| `%APPDATA%\OpenASCII\log.txt` | log (rotates above 1 MB) |
 
-## Criar o teu wallpaper
+## Create your own wallpaper
 
-Uma pasta com um `wallpaper.toml` e um `main.hlsl` de poucas linhas:
+A folder with a `wallpaper.toml` and a short `main.hlsl`:
 
 ```hlsl
 CellOut cell(CellIn i)
 {
-    float d = length(i.world - mouse.world); // unidades de mundo: não dependem da resolução
+    float d = length(i.world - mouse.world); // world units: independent of resolution
     float v = sin(d * 0.5 - time * 3.0 * param("speed")) * exp(-d * 0.03);
     CellOut o;
-    o.value = v * 0.5 + 0.5;    // escolhe o caractere
-    o.fg = palette(o.value);    // e a cor
+    o.value = v * 0.5 + 0.5;    // picks the character
+    o.fg = palette(o.value);    // and the color
     o.bg = float4(0, 0, 0, 0);
     o.state = float4(0, 0, 0, 0);
     o.glyph = 0;
@@ -141,52 +137,54 @@ CellOut cell(CellIn i)
 }
 ```
 
-Guia completo, com a API toda e temas sem código: **[docs/CREATING_WALLPAPERS.md](docs/CREATING_WALLPAPERS.md)**. O mais fácil é o launcher → **Novo wallpaper**: escolhe um modelo, dá-lhe um nome e o código abre no teu editor; cada gravação aparece logo no ambiente de trabalho.
+The easiest way is the launcher's **New wallpaper**: the blank template shows a simple text with five effects in comments that you turn on by deleting the `//` (they stack). Every save shows up on the desktop right away. Full guide (in Portuguese for now): **[docs/CREATING_WALLPAPERS.md](docs/CREATING_WALLPAPERS.md)**.
 
-## Compilar a partir do código
+## Build from source
 
-Requisitos: **Windows 10/11 x64**, **Visual Studio 2022** com o workload *Desenvolvimento para desktop com C++* (MSVC v143 + Windows SDK) e **Git**.
+Requirements: **Windows 10/11 x64**, **Visual Studio 2022** with the *Desktop development with C++* workload (MSVC v143 + Windows SDK) and **Git**.
 
 ```powershell
-# 0. O código
+# 0. The code
 git clone https://github.com/victorkloh/openASCII.git
 cd openASCII
 
-# 1. Ferramentas (CMake, Ninja, vcpkg) numa pasta do utilizador, sem admin
+# 1. Tools (CMake, Ninja, vcpkg) in a user folder, no admin
 pwsh scripts/setup.ps1
 
-# 2. Configurar, compilar e testar (Release por defeito)
+# 2. Configure, build and test (Release by default)
 pwsh scripts/build.ps1
 
-# 3. Correr numa janela, com logs na consola
+# 3. Run in a window, with logs in the console
 build\msvc\Release\openascii.exe --windowed --verbose
 
-# 4. Criar a release em dist/: zip portátil, instalador (com o Inno Setup 6 instalado) e SHA256SUMS.txt
+# 4. Build the release in dist/: portable zip, installer (with Inno Setup 6) and SHA256SUMS.txt
 pwsh scripts/package.ps1
 ```
 
-O instalador é descrito em [`installer/OpenASCII.iss`](installer/OpenASCII.iss) (Inno Setup 6: `winget install JRSoftware.InnoSetup`). No GitHub, criar uma tag `vX.Y.Z` igual à versão do `CMakeLists.txt` compila, testa e prepara uma release em rascunho com estes ficheiros (`.github/workflows/release.yml`).
+The installer is described in [`installer/OpenASCII.iss`](installer/OpenASCII.iss). On GitHub, pushing a `vX.Y.Z` tag matching the version in `CMakeLists.txt` builds, tests and prepares a draft release (`.github/workflows/release.yml`).
 
-Com CMake ≥ 3.25 e vcpkg já instalados, basta definir `VCPKG_ROOT` e usar os presets (`cmake --preset msvc`, `cmake --build --preset msvc-release`, `ctest --preset msvc-release`). As dependências (`wil`, `tomlplusplus`, `doctest`) vêm do vcpkg em modo manifest, compiladas estaticamente.
+**Translations**: interface texts go through `tr()` with the Portuguese text as the key; English is in [`src/ui/lang/en.inc`](src/ui/lang/en.inc). Adding a language means adding a table and one line in `src/ui/I18n.cpp`. Wallpapers can have `description_<code>` in their `[meta]`.
 
-## Documentação
+## Documentation
 
-- [`PROJECT.md`](PROJECT.md) — a especificação completa (requisitos, formato dos wallpapers, fases, checklist de testes).
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — como funciona por dentro e porquê: WorkerW, flip model, atlas de glifos, compute shader, DPI, pausas, loop sem polling.
-- [`docs/CREATING_WALLPAPERS.md`](docs/CREATING_WALLPAPERS.md) — criar wallpapers e temas.
-- [`CHANGELOG.md`](CHANGELOG.md) — histórico de versões.
+The project documentation is in Portuguese for now:
+
+- [`PROJECT.md`](PROJECT.md): the full specification.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): how it works inside and why.
+- [`docs/CREATING_WALLPAPERS.md`](docs/CREATING_WALLPAPERS.md): creating wallpapers and themes.
+- [`CHANGELOG.md`](CHANGELOG.md): version history.
 
 ## Roadmap
 
-| Fase | Conteúdo | Estado |
+| Phase | Content | Status |
 |---|---|---|
-| 0 — Esqueleto | CMake + vcpkg, manifesto PerMonitorV2, ícone, log, instância única, doctest | ✅ |
-| 1 — Integração com o desktop | WorkerW (dois layouts), janela por monitor, D3D11 flip, DPI/monitores, reattach, pausas, repor wallpaper | ✅ código · ⏳ checklist manual |
-| 2 — Render ASCII | GlyphAtlas (DirectWrite), cell buffer, `grid.hlsl`, blocos/caixa/Braille procedurais, `--bench` | ✅ · ⏳ teste a 200% |
-| 3 — Input + backend shader | Raw Input, DesktopHitTest, `prelude.hlsl`, `prev()`, params, manifest TOML, hot reload, erros no ecrã; `ripple`, `matrix`, `terrain`, `starfield` | ✅ · ⏳ teste com o rato no desktop |
-| 4 — Backend script | LuaJIT com sandbox, natives (fluid, particles, life); `fluid`, `particles`, `life`, `clock` | ⏳ |
-| 5 — App e polimento | Menu da bandeja próprio, launcher (personalizar, criar, editar), temas, autostart, efeito estendido entre monitores | 🟡 grande parte feita · falta wallpaper diferente por monitor |
+| 0 — Skeleton | CMake + vcpkg, PerMonitorV2 manifest, icon, log, single instance, doctest | ✅ |
+| 1 — Desktop integration | WorkerW (both layouts), one window per monitor, D3D11 flip, DPI/monitors, reattach, pauses, restore wallpaper | ✅ |
+| 2 — ASCII rendering | GlyphAtlas (DirectWrite), cell buffer, procedural blocks/box/Braille, `--bench` | ✅ |
+| 3 — Input + shader backend | prelude, `prev()`, params, TOML manifest, hot reload, on-screen errors | ✅ |
+| 4 — Script backend | LuaJIT with sandbox and natives | ⏳ |
+| 5 — App and polish | Tray menu, launcher, themes, autostart, span across monitors, different wallpaper per monitor, languages | ✅ |
 
-## Licença
+## License
 
 [MIT](LICENSE).

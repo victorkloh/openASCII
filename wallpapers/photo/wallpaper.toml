@@ -3,6 +3,7 @@ name = "Photo"
 author = "OpenASCII"
 version = "1.0.0"
 description = "A tua imagem, GIF ou vídeo em ASCII a cores, com contornos. Passa o rato para ver uma lupa; clica para uma onda, como uma gota na água. Por defeito usa o teu wallpaper do Windows: escolhe outra imagem ou vídeo na página deste wallpaper."
+description_en = "Your image, GIF or video in color ASCII, with outlines. Hover to see a magnifier; click for a ripple, like a drop in water. By default it uses your Windows wallpaper: pick another image or video on this wallpaper's page."
 category = "Dados e média"
 
 [render]

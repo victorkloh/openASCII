@@ -1,8 +1,8 @@
 [meta]
 name = "Temple"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Uma cena 3D em tempo real (raymarching): templo, sombras suaves, oclusão ambiente e nevoeiro. O rato roda a câmara. Tech demo do 3D."
+description = "Um templo em 3D, em tempo real, com sombras suaves, nevoeiro e o sol a mover-se no céu. Passa o rato para rodar a câmara."
 category = "3D e espaço"
 
 [render]

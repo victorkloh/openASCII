@@ -17,7 +17,7 @@ std::filesystem::path Config::path() {
     PWSTR raw = nullptr;
     std::filesystem::path p = L"config.toml";
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &raw))) {
-        p = std::filesystem::path(raw) / L"AsciiPaper" / L"config.toml";
+        p = std::filesystem::path(raw) / L"OpenASCII" / L"config.toml";
         CoTaskMemFree(raw);
     }
     return p;
@@ -45,6 +45,7 @@ Config Config::load() {
         c.webcamAllowed = t["webcam_allowed"].value_or(c.webcamAllowed);
         c.playlistMinutes = std::clamp(static_cast<int>(t["playlist_minutes"].value_or(int64_t{0})), 0, 24 * 60);
         c.playlistShuffle = t["playlist_shuffle"].value_or(c.playlistShuffle);
+        c.firstRunDone = t["first_run_done"].value_or(c.firstRunDone);
         if (const toml::array* list = t["playlist"].as_array()) {
             for (const auto& item : *list)
                 if (auto s = item.value<std::string>(); s && !s->empty()) c.playlist.push_back(*s);
@@ -75,13 +76,14 @@ bool Config::save() const {
         {"webcam_allowed", webcamAllowed},
         {"playlist_minutes", playlistMinutes},
         {"playlist_shuffle", playlistShuffle},
+        {"first_run_done", firstRunDone},
     };
     toml::array list;
     for (const auto& w : playlist) list.push_back(w);
     t.insert("playlist", std::move(list));
     std::ofstream out(file, std::ios::binary | std::ios::trunc);
     if (!out) return false;
-    out << "# Configuração do AsciiPaper (reescrita pela app ao escolher um wallpaper na tray)\n"
+    out << "# Configuração do OpenASCII (reescrita pela app ao escolher um wallpaper na tray)\n"
         << "# interaction: \"desktop_only\" (só reage sobre o desktop) ou \"always\"\n"
         << "# fps: 60 por defeito; 0 = automático (cada wallpaper decide); outro valor = FPS fixo para todos\n"
         << "# other_apps_on_start: \"ask\" | \"pause\" | \"ignore\"  (Wallpaper Engine, Lively)\n"

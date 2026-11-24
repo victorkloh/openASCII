@@ -86,6 +86,7 @@ public:
     void pushClip(const R& r);
     void popClip();
     float textWidth(std::wstring_view s, const TextStyle& style);
+    float textHeight(std::wstring_view s, const TextStyle& style, float maxWidth); // com quebra de linha
 
     // ---- Widgets (devolvem true quando o utilizador fez alguma coisa) ----
     bool button(Id id, const R& r, std::wstring_view label, ButtonKind kind = ButtonKind::Secondary,

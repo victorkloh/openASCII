@@ -134,7 +134,7 @@ CellOut cell(CellIn i)
     {
         float t = (bar + 0.5) / barCount;
         float h = spectrumAt(pow(t, 0.8)) * monH * param("height");   // altura em células
-        int bottom = mon.w - 1;
+        int bottom = workRectAt(c).w - 1; // por cima da barra de tarefas, não por trás dela
         float fromBottom = float(bottom - c.y);
         // Pico: guardado na célula de baixo da barra; desce 12 células/s.
         float peakPrev = prev(int2(c.x, bottom)).z;

@@ -16,10 +16,12 @@ struct Options {
     std::wstring screenshot; // --screenshot <ficheiro.png>: renderiza fora do ecrã, grava e sai
     double screenshotDelay = 3.0; // --screenshot-delay <s>: quanto tempo a animação corre antes
     int uiHeight = 720;           // --ui-height <dip>: altura da captura do launcher (ver a página inteira)
+    int uiWidth = 1080;           // --ui-width <dip>: largura da captura do launcher (testar janelas estreitas)
     bool openLauncher = false;    // --launcher: abre o launcher ao arrancar
     std::wstring uiScreenshot;    // --ui-screenshot <png> [página]: desenha o launcher num PNG e sai
     int uiPage = 0;               //   0 = wallpaper, 1 = novo, 2 = definições
     std::wstring flyoutScreenshot; // --flyout-screenshot <png>: desenha o menu da bandeja num PNG e sai
+    int workInset = 0;             // --work-inset <px>: em --windowed, simula uma barra de tarefas em baixo
 };
 
 struct ParseResult {

@@ -19,7 +19,7 @@ try {
         ctest --preset "msvc-$($Config.ToLower())"
         if ($LASTEXITCODE) { throw 'testes falharam' }
     }
-    Write-Host "OK: build\msvc\$Config\asciipaper.exe"
+    Write-Host "OK: build\msvc\$Config\openascii.exe"
 } finally {
     Pop-Location
 }

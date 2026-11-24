@@ -34,6 +34,14 @@ TEST_CASE("opções com valor") {
     CHECK(r.options.benchSeconds == 10);
 }
 
+TEST_CASE("--work-inset simula uma barra de tarefas") {
+    const auto r = parse({L"--windowed", L"--work-inset", L"48"});
+    CHECK(r.error.empty());
+    CHECK(r.options.workInset == 48);
+    CHECK_FALSE(parse({L"--work-inset", L"-3"}).error.empty());
+    CHECK_FALSE(parse({L"--work-inset"}).error.empty());
+}
+
 TEST_CASE("--screenshot implica --windowed") {
     const auto r = parse({L"--screenshot", L"out.png"});
     CHECK(r.error.empty());

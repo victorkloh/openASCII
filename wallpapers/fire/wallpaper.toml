@@ -1,6 +1,6 @@
 [meta]
 name = "Fire"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
 description = "Fogo ASCII que sobe do fundo de cada ecrã. O rato acende chamas; clicar faz uma explosão."
 category = "Retro"

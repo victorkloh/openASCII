@@ -1,8 +1,8 @@
 [meta]
 name = "Fractal"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Zoom sem fim no conjunto de Mandelbrot, a visitar pontos famosos. Tech demo de matemática por célula."
+description = "Um zoom sem fim no conjunto de Mandelbrot, a visitar os seus pontos mais famosos. É só para ver: não reage ao rato."
 category = "Simulações"
 
 [render]

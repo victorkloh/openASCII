@@ -7,7 +7,7 @@ constexpr float kW = 460.0f, kH = 236.0f;
 }
 
 bool ConfirmDialog::create(HINSTANCE instance) {
-    return createWindow(instance, L"AsciiPaperDialog", L"AsciiPaper", WS_POPUP, WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+    return createWindow(instance, L"OpenASCIIDialog", L"OpenASCII", WS_POPUP, WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
                         static_cast<int>(kW), static_cast<int>(kH), CS_DROPSHADOW);
 }
 

@@ -44,12 +44,12 @@ render::CompiledShader compileWallpaperShader(const Manifest& manifest, const st
     // Cache no disco: compilar pode demorar segundos (simulações grandes); o mesmo código
     // compilado antes carrega em milissegundos. A chave é o texto completo (prelude + código +
     // epílogo) e a versão da app, por isso qualquer mudança gera uma entrada nova.
-    const std::string key = std::string(ASCIIPAPER_VERSION_STR) + "|cs_5_0|" + source;
+    const std::string key = std::string(OPENASCII_VERSION_STR) + "|cs_5_0|" + source;
     uint64_t h = 1469598103934665603ull; // FNV-1a 64
     for (unsigned char ch : key) h = (h ^ ch) * 1099511628211ull;
     std::filesystem::path cacheFile;
     if (PWSTR raw = nullptr; SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, nullptr, &raw))) {
-        cacheFile = std::filesystem::path(raw) / L"AsciiPaper" / L"shadercache" / std::format(L"{:016x}.cso", h);
+        cacheFile = std::filesystem::path(raw) / L"OpenASCII" / L"shadercache" / std::format(L"{:016x}.cso", h);
         CoTaskMemFree(raw);
     }
     std::error_code ec;

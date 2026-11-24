@@ -64,7 +64,7 @@ std::vector<fs::path> wallpaperRoots() {
     std::vector<fs::path> roots{exeDir() / L"wallpapers"};
     PWSTR raw = nullptr;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &raw))) {
-        roots.push_back(fs::path(raw) / L"AsciiPaper" / L"wallpapers");
+        roots.push_back(fs::path(raw) / L"OpenASCII" / L"wallpapers");
         CoTaskMemFree(raw);
     }
     return roots;
@@ -234,7 +234,7 @@ bool saveOverrides(const std::string& key, const Theme& overrides) {
     }
     fs::create_directories(file.parent_path(), ec);
     std::ofstream out(file, std::ios::binary | std::ios::trunc);
-    out << themeToToml(overrides, "Ajustes do utilizador para \"" + key + "\" (gerado pelo AsciiPaper)");
+    out << themeToToml(overrides, "Ajustes do utilizador para \"" + key + "\" (gerado pelo OpenASCII)");
     return static_cast<bool>(out);
 }
 

@@ -1,5 +1,5 @@
 #pragma once
-// Log simples e thread-safe para %APPDATA%\AsciiPaper\log.txt (com rotação),
+// Log simples e thread-safe para %APPDATA%\OpenASCII\log.txt (com rotação),
 // OutputDebugString (visível no debugger) e, com --verbose, a consola de onde viemos.
 
 #include <format>

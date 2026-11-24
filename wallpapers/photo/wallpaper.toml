@@ -1,8 +1,8 @@
 [meta]
 name = "Photo"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "A tua imagem, GIF ou vídeo em ASCII a cores, com contornos e uma lupa no rato. Tech demo de [inputs] source."
+description = "A tua imagem, GIF ou vídeo em ASCII a cores, com contornos. Passa o rato para ver uma lupa; clica para uma onda, como uma gota na água. Por defeito usa o teu wallpaper do Windows: escolhe outra imagem ou vídeo na página deste wallpaper."
 category = "Dados e média"
 
 [render]
@@ -17,7 +17,7 @@ charset = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@
 glyphs = "-/|\\"   # traços das arestas
 
 [inputs]
-# "wallpaper" = o wallpaper do Windows que o AsciiPaper substituiu. Também aceita um caminho
+# "wallpaper" = o wallpaper do Windows que o OpenASCII substituiu. Também aceita um caminho
 # (relativo a esta pasta, ou absoluto, com %VARIAVEIS%): .png .jpg .bmp .gif .mp4 .mov .wmv
 source = "wallpaper"
 

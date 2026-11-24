@@ -25,7 +25,7 @@ static const uint2 LABELS[40] = {uint2(0, 3), uint2(3, 3), uint2(6, 5), uint2(11
 // glyphs = "┌┐└┘─│█▁▂▃▄▅▆▇·"
 static const uint G_TL = 0, G_TR = 1, G_BL = 2, G_BR = 3, G_H = 4, G_V = 5, G_FULL = 6, G_BLOCK1 = 7, G_DOT = 14;
 
-static int4 P; // monitor principal (células)
+static int4 P; // área de trabalho do monitor principal (células, sem a barra de tarefas)
 
 // A paleta tem 8 cores com papéis fixos: 0 fundo, 1 painel, 2-3 apagado, 4 destaque, 5 claro,
 // 6 quente (alertas, sol), 7 texto.
@@ -125,7 +125,7 @@ CellOut cell(CellIn i)
     o.fg = pal(3);
     o.bg = 0;
     int2 c = int2(i.id);
-    P = primaryRect();
+    P = primaryWorkRect(); // os painéis dentro da área visível (sem a barra de tarefas)
 
     float4 accent = pal(4), text = pal(7), dim = pal(2.5);
 

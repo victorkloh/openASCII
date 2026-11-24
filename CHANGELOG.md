@@ -2,7 +2,9 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); versões em [SemVer](https://semver.org/lang/pt-PT/).
 
-## [0.5.0] — 2026-11-22
+## [0.5.0] — 2026-11-24
+
+Primeira versão pública. As versões até à 0.4.0 foram de desenvolvimento e não chegaram a ser publicadas.
 
 ### Adicionado
 - **15 tech demos**, um wallpaper por capacidade do motor, comentados para servirem de exemplo: `photo`, `spectrum`, `snow`, `temple`, `sandbox`, `fluid`, `coral`, `life`, `fractal`, `hud`, `planet`, `bonsai`, `mirror`, `terminal`, `arcade`. Temas novos: `synthwave/beat`, `valley/weather`, `matrix/code`.
@@ -13,14 +15,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); 
 - **Launcher**: secção "entradas" por wallpaper (o que usa, "Escolher imagem ou vídeo", "Incluir na playlist"); Definições com cidade do tempo real, autorização da webcam e playlist (de N em N minutos, ordem aleatória).
 - **Webcam com autorização explícita** (pergunta antes de ligar; "lembrar" opcional).
 - `--screenshot-delay <s>`; o `--bench` já não pergunta pelo Wallpaper Engine.
-- **Instalador** (`AsciiPaper-<versão>-setup.exe`, Inno Setup): por utilizador e sem administrador. Pergunta se instala os **wallpapers predefinidos** (sem eles, a app instala-se vazia). Tem a opção **Iniciar com o Windows** e atalho no Menu Iniciar. Fecha a app antes de atualizar ou desinstalar, para o fundo original voltar. Na desinstalação, só apaga as tuas definições e wallpapers se disseres que sim. Continua a haver a versão portátil em zip.
+- **Instalador** (`OpenASCII-<versão>-setup.exe`, Inno Setup): por utilizador e sem administrador. Pergunta se instala os **wallpapers predefinidos** (sem eles, a app instala-se vazia). Tem a opção **Iniciar com o Windows** e atalho no Menu Iniciar. Fecha a app antes de atualizar ou desinstalar, para o fundo original voltar. Na desinstalação, só apaga as tuas definições e wallpapers se disseres que sim. Continua a haver a versão portátil em zip.
+- **Primeiros passos**: na primeira vez que a app arranca, o launcher mostra quatro passos curtos: boas-vindas e onde fica a app, desempenho (FPS, pausas, vários monitores), arranque com o Windows (opcional) e dicas. Cada escolha aplica-se logo e fica nas Definições.
+- **Arranque rápido** (Definições e primeiros passos): em vez da lista de arranque do Windows, que atrasa as apps uns segundos depois de iniciares sessão, usa uma tarefa agendada só para a tua conta (sem administrador, prioridade normal, sem limite de tempo). Com o PC bloqueado, a app continua aberta em pausa, por isso ao desbloquear o wallpaper já lá está. O desinstalador apaga a tarefa.
 - **Sem wallpapers instalados**, a app fica na bandeja sem tapar o fundo do Windows, e o launcher e o menu convidam a criar o primeiro.
 - Abrir a app outra vez (o atalho, com ela já a correr desde o arranque) **mostra o launcher** da instância que já existe.
 - Releases automáticas no GitHub: uma tag `vX.Y.Z` compila, testa, gera o instalador e o zip e cria um rascunho da release.
 
 ### Alterado
+- **Novo nome: OpenASCII** (antes AsciiPaper). O executável passa a ser `openascii.exe` e as definições passam para `%APPDATA%\OpenASCII`. Na primeira vez, a app traz sozinha as definições, os ajustes e os teus wallpapers da pasta antiga, e passa o arranque com o Windows para o nome novo.
 - **60 FPS por defeito** (antes: automático, a maioria a 30). As simulações que avançam por frame (fogo, ondas, neve, coral, vida, sandbox) usam `fixedStep()` e correm à mesma velocidade a qualquer FPS; configs antigas com `fps = 0` passam a 60.
-- **Aplicar sem cliques perdidos**: um pedido feito enquanto outro wallpaper compila fica em fila (antes perdia-se e era preciso clicar outra vez); o botão e o cartão do menu mostram "A preparar" enquanto compila; o código compilado fica em cache (`%LOCALAPPDATA%\AsciiPaper\shadercache`): o sandbox passou de 5,2 s para 21 ms na segunda vez.
+- **Aplicar sem cliques perdidos**: um pedido feito enquanto outro wallpaper compila fica em fila (antes perdia-se e era preciso clicar outra vez); o botão e o cartão do menu mostram "A preparar" enquanto compila; o código compilado fica em cache (`%LOCALAPPDATA%\OpenASCII\shadercache`): o sandbox passou de 5,2 s para 21 ms na segunda vez.
 - **Efeitos de ecrã em qualquer wallpaper** (launcher): Nenhum, CRT, Néon, Cinema ou à medida (brilho, linhas, curvatura, vinheta, aberração, grão).
 - **Pesquisa e grupos no launcher**: procurar por nome, tipo ou descrição; lista agrupada por `meta.category` (Paisagens, Ambiente, Retro, 3D e espaço, Simulações, Dados e média, Jogos; os teus primeiro).
 - Webcam e cidade do tempo real configuram-se na própria página do wallpaper que as usa.
@@ -36,6 +41,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); 
   - a neve consulta as janelas e os ícones uma vez por célula, em vez de ~20.
 
 ### Corrigido
+- **O que fica no fundo do ecrã já não se esconde atrás da barra de tarefas.** Os shaders recebem a área de trabalho de cada monitor (`primaryWorkRect()`, `workRectAt(c)`), e isto foi aplicado onde importa:
+  - a raquete do `arcade`;
+  - o vaso do `bonsai`;
+  - a areia e as algas do `aquarium`;
+  - a cidade e os lançamentos do `fireworks`;
+  - as barras do `spectrum`;
+  - os painéis do `hud` e do `terminal`.
+
+  Muda sozinho se a barra mudar de sítio ou se esconder. Para testar: `--windowed --work-inset 48`.
 - **O fundo do Windows aparecia por instantes por cima do wallpaper** (sobretudo com o Windows Spotlight, que troca o fundo sozinho). Quando troca o fundo, o Explorer reordena as janelas do ambiente de trabalho e a dele ficava por cima da nossa até à passagem de layout seguinte (até ~1,5 s). Agora a ordem é verificada a cada frame (no máximo a cada 50 ms) e reposta logo: medido, 16–47 ms.
 - Cada `WM_SETTINGCHANGE` do Windows (são frequentes) reposicionava as janelas do wallpaper e refazia atlas, grelhas e canvas, mesmo sem nada ter mudado. Agora só se mexe no que mudou.
 - **Quebra de FPS com o rato sobre o launcher e ao trocar de wallpaper**: o ciclo de mensagens ficava preso a alternar entre movimento do rato e pintura e nunca atendia o timer dos frames; o fundo passa a desenhar à hora certa entre mensagens.
@@ -72,7 +86,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/); 
 - **Launcher**: personalizar cada wallpaper (variantes, resolução da grelha, escala do efeito, FPS, fonte, cores com seletor HSV, caracteres, todos os parâmetros) ao vivo; guardar como tema; criar wallpapers novos a partir de um modelo e abrir o código; definições gerais (modo estendido, interação do rato, pausas, limite de FPS, iniciar com o Windows).
 - **Resolução vs escala**: `render.scale` e coordenadas de mundo (`i.world`, `mouse.world`, `worldSize`) — mudar a resolução da grelha já não muda o tamanho do efeito.
 - **Sprites**: `render.glyphs` + `glyph(k)` no shader.
-- Ajustes do utilizador por wallpaper em `%APPDATA%\AsciiPaper\overrides\` (formato de tema).
+- Ajustes do utilizador por wallpaper em `%APPDATA%\OpenASCII\overrides\` (formato de tema).
 - `visible(c)` no prelude; `--launcher`, `--ui-screenshot`, `--flyout-screenshot`.
 - Toolkit de interface em modo imediato com Direct2D (repinta só com input), tema claro/escuro do Windows.
 
@@ -108,7 +122,7 @@ Primeira versão alpha: **Fases 0 e 1** (esqueleto + integração com o desktop)
 ### Adicionado
 - Build com CMake + vcpkg (manifest, `x64-windows-static`, CRT estático), `/W4 /WX /permissive-`, presets MSVC e Ninja/clang-cl.
 - Manifesto PerMonitorV2 + UTF-8, ícone, informação de versão no `.exe`.
-- Log em `%APPDATA%\AsciiPaper\log.txt` com rotação; `--verbose` também na consola.
+- Log em `%APPDATA%\OpenASCII\log.txt` com rotação; `--verbose` também na consola.
 - Instância única (mutex com nome).
 - Ligação ao desktop atrás dos ícones: layout clássico (`WorkerW` de topo), layout 24H2+ (`WorkerW` filho do `Progman`) e fallback.
 - Uma janela + swapchain D3D11 por monitor, flip model com fallback para blt, primeiro frame antes de mostrar (sem flash preto).
@@ -120,8 +134,4 @@ Primeira versão alpha: **Fases 0 e 1** (esqueleto + integração com o desktop)
 - Tray: Pausar/Retomar, Abrir pasta de logs, Sair. `taskkill` sem `/f` sai de forma limpa.
 - Modo `--windowed` para desenvolvimento.
 - Testes unitários (doctest): geometria/coordenadas do ecrã virtual, DPI, política de pausas, argumentos.
-
-[0.4.0]: ../../releases/tag/v0.4.0
-[0.3.0]: ../../releases/tag/v0.3.0
-[0.2.0]: ../../releases/tag/v0.2.0
-[0.1.0]: ../../releases/tag/v0.1.0
+[0.5.0]: https://github.com/victorkloh/openASCII/releases/tag/v0.5.0

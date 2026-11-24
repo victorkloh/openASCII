@@ -1,28 +1,28 @@
-﻿; Instalador do AsciiPaper (Inno Setup 6: https://jrsoftware.org/isinfo.php).
+﻿; Instalador do OpenASCII (Inno Setup 6: https://jrsoftware.org/isinfo.php).
 ;
 ; Normalmente é o scripts/package.ps1 que o compila, depois de preparar a pasta da release:
-;   ISCC /DAppVersion=0.5.0 /DSourceDir=<dist\AsciiPaper-0.5.0-win64> /O<dist> installer\AsciiPaper.iss
+;   ISCC /DAppVersion=0.5.0 /DSourceDir=<dist\OpenASCII-0.5.0-win64> /O<dist> installer\OpenASCII.iss
 ;
 ; Decisões:
-; - Instalação POR UTILIZADOR (%LOCALAPPDATA%\Programs\AsciiPaper), sem pedir administrador:
+; - Instalação POR UTILIZADOR (%LOCALAPPDATA%\Programs\OpenASCII), sem pedir administrador:
 ;   a app só mexe no ambiente de trabalho do próprio utilizador, e o arranque com o Windows é a
 ;   mesma entrada "Run" do registo (HKCU) que o interruptor das Definições usa.
 ; - Os wallpapers predefinidos são um componente opcional. Sem eles a app instala-se vazia: o
 ;   fundo do Windows fica à vista e o launcher convida a criar o primeiro wallpaper.
 ; - Antes de instalar/atualizar/desinstalar, a app é fechada com WM_CLOSE (como o "Sair"): repõe
 ;   o fundo original do Windows e retoma o Wallpaper Engine/Lively, se os tinha pausado.
-; - As definições e os wallpapers do utilizador (%APPDATA%\AsciiPaper) ficam, a não ser que ele
+; - As definições e os wallpapers do utilizador (%APPDATA%\OpenASCII) ficam, a não ser que ele
 ;   diga que sim à pergunta no fim da desinstalação.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
 #ifndef SourceDir
-  #define SourceDir "..\dist\AsciiPaper-" + AppVersion + "-win64"
+  #define SourceDir "..\dist\OpenASCII-" + AppVersion + "-win64"
 #endif
 
-#define AppName "AsciiPaper"
-#define AppExe "asciipaper.exe"
+#define AppName "OpenASCII"
+#define AppExe "openascii.exe"
 
 [Setup]
 AppId={{51186E77-7AF1-4AAC-A132-6A267D4181B4}
@@ -30,6 +30,9 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppName}
+AppPublisherURL=https://github.com/victorkloh/openASCII
+AppSupportURL=https://github.com/victorkloh/openASCII/issues
+AppUpdatesURL=https://github.com/victorkloh/openASCII/releases
 VersionInfoVersion={#AppVersion}
 VersionInfoDescription={#AppName} — wallpapers ASCII animados
 DefaultDirName={localappdata}\Programs\{#AppName}
@@ -64,32 +67,32 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 TypeFull=Full installation (app + built-in wallpapers)
 TypeApp=App only (no wallpapers: create your own)
 TypeCustom=Custom installation
-CompApp=AsciiPaper (the app)
+CompApp=OpenASCII (the app)
 CompWallpapers=Built-in wallpapers (28 effects and their variants)
-TaskAutostart=Start AsciiPaper with Windows
+TaskAutostart=Start OpenASCII with Windows
 TaskGroupStart=Startup:
-RunNow=Open AsciiPaper now
-AppStillRunning=AsciiPaper is still running. Close it from the tray icon (Quit) and try again.
+RunNow=Open OpenASCII now
+AppStillRunning=OpenASCII is still running. Close it from the tray icon (Quit) and try again.
 DeleteUserData=Also delete your settings and the wallpapers you created?%n%n%1%n%nThis cannot be undone.
 pt.TypeFull=Instalação completa (app + wallpapers predefinidos)
 pt.TypeApp=Só a app (sem wallpapers: crias os teus)
 pt.TypeCustom=Instalação personalizada
-pt.CompApp=AsciiPaper (a aplicação)
+pt.CompApp=OpenASCII (a aplicação)
 pt.CompWallpapers=Wallpapers predefinidos (28 efeitos e as suas variantes)
-pt.TaskAutostart=Iniciar o AsciiPaper com o Windows
+pt.TaskAutostart=Iniciar o OpenASCII com o Windows
 pt.TaskGroupStart=Arranque:
-pt.RunNow=Abrir o AsciiPaper agora
-pt.AppStillRunning=O AsciiPaper ainda está a correr. Fecha-o no ícone da bandeja (Sair) e tenta de novo.
+pt.RunNow=Abrir o OpenASCII agora
+pt.AppStillRunning=O OpenASCII ainda está a correr. Fecha-o no ícone da bandeja (Sair) e tenta de novo.
 pt.DeleteUserData=Apagar também as tuas definições e os wallpapers que criaste?%n%n%1%n%nNão é possível desfazer.
 ptbr.TypeFull=Instalação completa (app + wallpapers predefinidos)
 ptbr.TypeApp=Somente o app (sem wallpapers: você cria os seus)
 ptbr.TypeCustom=Instalação personalizada
-ptbr.CompApp=AsciiPaper (o aplicativo)
+ptbr.CompApp=OpenASCII (o aplicativo)
 ptbr.CompWallpapers=Wallpapers predefinidos (28 efeitos e suas variantes)
-ptbr.TaskAutostart=Iniciar o AsciiPaper com o Windows
+ptbr.TaskAutostart=Iniciar o OpenASCII com o Windows
 ptbr.TaskGroupStart=Inicialização:
-ptbr.RunNow=Abrir o AsciiPaper agora
-ptbr.AppStillRunning=O AsciiPaper ainda está em execução. Feche-o pelo ícone da bandeja (Sair) e tente novamente.
+ptbr.RunNow=Abrir o OpenASCII agora
+ptbr.AppStillRunning=O OpenASCII ainda está em execução. Feche-o pelo ícone da bandeja (Sair) e tente novamente.
 ptbr.DeleteUserData=Apagar também suas configurações e os wallpapers que você criou?%n%n%1%n%nNão é possível desfazer.
 
 [Types]
@@ -130,10 +133,14 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [Run]
 Filename: "{app}\{#AppExe}"; Parameters: "--launcher"; Description: "{cm:RunNow}"; Flags: nowait postinstall skipifsilent
 
+[UninstallRun]
+; O "arranque rápido" das Definições é uma tarefa agendada com o nome da app: sai com ela.
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""{#AppName}"" /F"; Flags: runhidden; RunOnceId: "RemoveFastStart"
+
 [UninstallDelete]
 ; A cache de shaders compilados é só cache: sai sempre.
-Type: filesandordirs; Name: "{localappdata}\AsciiPaper\shadercache"
-Type: dirifempty; Name: "{localappdata}\AsciiPaper"
+Type: filesandordirs; Name: "{localappdata}\OpenASCII\shadercache"
+Type: dirifempty; Name: "{localappdata}\OpenASCII"
 Type: filesandordirs; Name: "{app}\wallpapers"
 Type: dirifempty; Name: "{app}"
 
@@ -151,7 +158,7 @@ var
 begin
   for I := 1 to 60 do
   begin
-    Wnd := FindWindowByClassName('AsciiPaperController');
+    Wnd := FindWindowByClassName('OpenASCIIController');
     if Wnd = 0 then
     begin
       Result := True;
@@ -161,7 +168,7 @@ begin
       PostMessage(Wnd, WM_CLOSE, 0, 0);
     Sleep(100);
   end;
-  Result := FindWindowByClassName('AsciiPaperController') = 0;
+  Result := FindWindowByClassName('OpenASCIIController') = 0;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -202,7 +209,7 @@ begin
     if Pos(Lowercase(ExpandConstant('{app}')), Lowercase(Value)) > 0 then
       RegDeleteValue(HKCU, RunKey, '{#AppName}');
   // Definições e wallpapers do utilizador: só com um "sim" explícito (o "não" é o botão por defeito).
-  UserData := ExpandConstant('{userappdata}\AsciiPaper');
+  UserData := ExpandConstant('{userappdata}\OpenASCII');
   if DirExists(UserData) and not UninstallSilent() then
     if MsgBox(FmtMessage(CustomMessage('DeleteUserData'), [UserData]), mbConfirmation,
               MB_YESNO or MB_DEFBUTTON2) = IDYES then

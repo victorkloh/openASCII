@@ -1,6 +1,6 @@
 # Ideias para efeitos mais avançados
 
-> Brainstorm para o futuro do AsciiPaper, **ordenado do melhor para o pior**. O critério combina três coisas:
+> Brainstorm para o futuro do OpenASCII, **ordenado do melhor para o pior**. O critério combina três coisas:
 > **impacto** (quanto o público vai gostar e partilhar), **esforço** (dias de trabalho, risco técnico) e
 > **encaixe** (quão bem cabe na arquitetura atual: compute shader por célula, canvas estendido, `prev()`,
 > launcher). Cada ideia diz *como* se faria aqui, não só *o quê*.
@@ -185,7 +185,7 @@ defeito, como pede a spec.
 clique, avaliar.
 
 **Como aqui.** Um índice JSON num repositório GitHub (sem servidor nosso); cada wallpaper é um zip. Verificação:
-só `.toml`, `.hlsl`, `.png`, `.ttf` (nada executável). Instalar = extrair para `%APPDATA%\AsciiPaper\wallpapers`.
+só `.toml`, `.hlsl`, `.png`, `.ttf` (nada executável). Instalar = extrair para `%APPDATA%\OpenASCII\wallpapers`.
 
 ## 11. Reação-difusão, Lenia, autómatos ★★★☆☆ ●
 
@@ -289,7 +289,7 @@ Mostrar a vida ou a munição de um jogo no fundo. Cada jogo é um caso diferent
 1. **Infraestrutura multi-pass + textura de entrada** (nº 8 e nº 1): desbloqueia imagens, vídeo, 3D .obj, fluido,
    reação-difusão e pós-processamento.
 2. **Imagens e GIFs → ASCII com contornos** (nº 1, sem vídeo ainda), o maior impacto por dia de trabalho.
-3. **Janelas como obstáculos** (nº 2), a característica única do AsciiPaper.
+3. **Janelas como obstáculos** (nº 2), a característica única do OpenASCII.
 4. **Áudio** (nº 3) e **dados ao vivo** (nº 6), que dão vida a todos os presets existentes.
 5. **Vídeo** (resto do nº 1), **3D .obj** (nº 4) e **galeria** (nº 10).
 

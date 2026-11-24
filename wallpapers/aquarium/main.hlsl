@@ -37,7 +37,9 @@ CellOut cell(CellIn i)
     int4 mon = monitorRectAt(c);
     float2 w = i.world;
     float monTop = float(mon.y) * worldPerCell.y;
-    float monBottom = float(mon.w) * worldPerCell.y;
+    // O fundo do aquário é o fundo da área de TRABALHO: a areia e as algas ficam por cima da
+    // barra de tarefas (por trás dela continua areia).
+    float monBottom = float(workRectAt(c).w) * worldPerCell.y;
     float monH = monBottom - monTop;
     float depth = saturate((w.y - monTop) / monH); // 0 superfície, 1 fundo
 

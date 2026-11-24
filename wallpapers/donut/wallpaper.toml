@@ -1,6 +1,6 @@
 [meta]
 name = "Donut"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
 description = "O donut 3D a girar, em homenagem ao clássico do terminal. O rato inclina-o; clicar dá-lhe um empurrão."
 category = "3D e espaço"

@@ -34,7 +34,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr wchar_t kControllerClass[] = L"AsciiPaperController";
+constexpr wchar_t kControllerClass[] = L"OpenASCIIController";
 constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 constexpr UINT WM_APP_TRAY = WM_APP + 10;
 constexpr UINT WM_APP_LOAD_DONE = WM_APP + 11; // terminou a compilação em segundo plano
@@ -86,28 +86,6 @@ bool samePath(const fs::path& a, const fs::path& b) {
     return !a.empty() && !b.empty() && fs::equivalent(a, b, ec);
 }
 
-bool autostartEnabled() {
-    wchar_t buf[MAX_PATH * 2] = {};
-    DWORD size = sizeof(buf);
-    return RegGetValueW(HKEY_CURRENT_USER, kRunKey, L"AsciiPaper", RRF_RT_REG_SZ, nullptr, buf, &size) ==
-           ERROR_SUCCESS;
-}
-
-void setAutostart(bool on) {
-    HKEY key = nullptr;
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, kRunKey, 0, KEY_SET_VALUE, &key) != ERROR_SUCCESS) return;
-    if (on) {
-        wchar_t exe[MAX_PATH * 2] = {};
-        GetModuleFileNameW(nullptr, exe, static_cast<DWORD>(std::size(exe)));
-        const std::wstring cmd = L"\"" + std::wstring(exe) + L"\"";
-        RegSetValueExW(key, L"AsciiPaper", 0, REG_SZ, reinterpret_cast<const BYTE*>(cmd.c_str()),
-                       static_cast<DWORD>((cmd.size() + 1) * sizeof(wchar_t)));
-    } else {
-        RegDeleteValueW(key, L"AsciiPaper");
-    }
-    RegCloseKey(key);
-}
-
 // Modelo para "Novo wallpaper" em branco.
 constexpr const char* kTemplateToml = R"toml([meta]
 name = "{NAME}"
@@ -132,7 +110,7 @@ palette = ["#05070d", "#1e3a8a", "#38bdf8", "#e0f2fe"]
 speed = { default = 1.0, min = 0.0, max = 4.0 }
 )toml";
 
-constexpr const char* kTemplateHlsl = R"hlsl(// O meu wallpaper. Grava este ficheiro e o AsciiPaper recarrega-o sozinho.
+constexpr const char* kTemplateHlsl = R"hlsl(// O meu wallpaper. Grava este ficheiro e o OpenASCII recarrega-o sozinho.
 // Guia: docs/CREATING_WALLPAPERS.md
 
 CellOut cell(CellIn i)
@@ -183,11 +161,11 @@ double App::qpcToSeconds(LONGLONG qpc) const {
 
 bool App::init() {
     const auto awareness = GetAwarenessFromDpiAwarenessContext(GetThreadDpiAwarenessContext());
-    log::info(L"AsciiPaper {} a arrancar (modo {}, DPI awareness {})", ASCIIPAPER_VERSION_WSTR,
+    log::info(L"OpenASCII {} a arrancar (modo {}, DPI awareness {})", OPENASCII_VERSION_WSTR,
               options_.windowed ? L"janela" : L"wallpaper", static_cast<int>(awareness));
 
     config_ = Config::load();
-    autostartCached_ = autostartEnabled(); // a interface pede settings() em cada pintura
+    autostartCached_ = desktop::queryAutostart(); // a interface pede settings() em cada pintura
     settings_.maxFps = config_.maxFps;
     settings_.pause.pauseOnMaximized = config_.pauseOnMaximized;
     settings_.pause.pauseOnBatterySaver = config_.pauseOnBatterySaver;
@@ -245,13 +223,13 @@ bool App::init() {
             // Página 3: a pergunta sobre o Wallpaper Engine (exemplo, sem a mostrar no ecrã).
             dialog_->ask(L"Outra app de wallpaper está ativa",
                          L"O Wallpaper Engine também desenha por trás dos ícones e pode aparecer por baixo do "
-                         L"AsciiPaper. Pausá-lo enquanto o AsciiPaper estiver a correr?\n\nAs definições e os "
+                         L"OpenASCII. Pausá-lo enquanto o OpenASCII estiver a correr?\n\nAs definições e os "
                          L"wallpapers dele não mudam; volta quando saíres.",
                          L"Pausar", L"Agora não", ui::accentFromPalette(wallpaper_.manifest.palette), nullptr);
             ShowWindow(dialog_->hwnd(), SW_HIDE);
             hr = dialog_->renderToPng(options_.uiScreenshot);
         } else if (gfx_ && !options_.uiScreenshot.empty()) {
-            hr = launcher_->renderToPng(options_.uiScreenshot, options_.uiPage, options_.uiHeight);
+            hr = launcher_->renderToPng(options_.uiScreenshot, options_.uiPage, options_.uiHeight, options_.uiWidth);
         }
         if (gfx_ && !options_.flyoutScreenshot.empty()) hr = flyout_->renderToPng(options_.flyoutScreenshot);
         log::info(L"Screenshot da interface: {}", SUCCEEDED(hr) ? L"ok" : win::hrToString(hr));
@@ -317,8 +295,16 @@ bool App::init() {
     }
     checkOtherApps();
     schedulePlaylist();
-    if (options_.openLauncher) openLauncher();
+    // Primeira vez: o launcher abre nos "primeiros passos" (preferências e arranque com o Windows).
+    if (options_.openLauncher || (!config_.firstRunDone && !benchmarking_)) openLauncher();
     return true;
+}
+
+void App::finishFirstRun() {
+    if (config_.firstRunDone) return;
+    config_.firstRunDone = true;
+    config_.save();
+    log::info(L"Primeiros passos concluídos");
 }
 
 void App::shutdown() {
@@ -363,7 +349,7 @@ void App::shutdown() {
         DestroyIcon(trayIcon_);
         trayIcon_ = nullptr;
     }
-    log::info(L"AsciiPaper terminou");
+    log::info(L"OpenASCII terminou");
 }
 
 bool App::createController() {
@@ -377,7 +363,7 @@ bool App::createController() {
     }
     // Janela de topo invisível, e NÃO message-only: as janelas message-only não recebem
     // mensagens em broadcast (WM_DISPLAYCHANGE, WM_SETTINGCHANGE, TaskbarCreated...).
-    controller_ = CreateWindowExW(WS_EX_TOOLWINDOW, kControllerClass, L"AsciiPaper", WS_POPUP, 0, 0, 0, 0,
+    controller_ = CreateWindowExW(WS_EX_TOOLWINDOW, kControllerClass, L"OpenASCII", WS_POPUP, 0, 0, 0, 0,
                                   nullptr, nullptr, instance_, this);
     if (!controller_) {
         log::error(L"Janela controladora falhou (erro {})", GetLastError());
@@ -866,7 +852,7 @@ bool App::saveAsTheme(const fs::path& path, const std::wstring& name, std::wstri
     std::error_code ec;
     fs::create_directories(file.parent_path(), ec);
     std::ofstream out(file, std::ios::binary | std::ios::trunc);
-    out << themeToToml(t, "Tema criado no launcher do AsciiPaper");
+    out << themeToToml(t, "Tema criado no launcher do OpenASCII");
     if (!out) {
         error = L"Não consegui escrever " + file.wstring();
         return false;
@@ -976,7 +962,8 @@ ui::GlobalSettings App::settings() const {
     s.pauseOnBatterySaver = config_.pauseOnBatterySaver;
     s.maxFps = config_.maxFps;
     s.fps = config_.fps;
-    s.autostart = autostartCached_;
+    s.autostart = autostartCached_ != desktop::AutostartMode::Off;
+    s.autostartFast = autostartCached_ == desktop::AutostartMode::Fast;
     s.otherAppsOnStart = config_.otherAppsOnStart == "pause" ? 1 : config_.otherAppsOnStart == "ignore" ? 2 : 0;
     s.otherAppsOnExit = config_.otherAppsOnExit == "resume" ? 1 : config_.otherAppsOnExit == "keep" ? 2 : 0;
     s.weatherCity = widen(config_.weatherCity);
@@ -1033,9 +1020,13 @@ void App::setSettings(const ui::GlobalSettings& s) {
     config_.save();
     if (inputsChanged && hasWallpaper_) configureInputs();
     if (playlistChanged) schedulePlaylist();
-    if (s.autostart != autostartCached_) {
-        setAutostart(s.autostart);
-        autostartCached_ = autostartEnabled();
+    const desktop::AutostartMode wantedStart = !s.autostart     ? desktop::AutostartMode::Off
+                                               : s.autostartFast ? desktop::AutostartMode::Fast
+                                                                 : desktop::AutostartMode::Normal;
+    if (wantedStart != autostartCached_) {
+        std::wstring error;
+        desktop::setAutostart(wantedStart, error);
+        autostartCached_ = desktop::queryAutostart();
     }
 
     settings_.maxFps = config_.maxFps;
@@ -1093,8 +1084,8 @@ void App::checkOtherApps() {
         return;
     }
     dialog_->ask(L"Outra app de wallpaper está ativa",
-                 std::format(L"O {} também desenha por trás dos ícones e pode aparecer por baixo do AsciiPaper. "
-                             L"Pausá-lo enquanto o AsciiPaper estiver a correr?\n\nAs definições e os wallpapers "
+                 std::format(L"O {} também desenha por trás dos ícones e pode aparecer por baixo do OpenASCII. "
+                             L"Pausá-lo enquanto o OpenASCII estiver a correr?\n\nAs definições e os wallpapers "
                              L"dele não mudam; volta quando saíres.",
                              names),
                  L"Pausar", L"Agora não", hasWallpaper_ ? ui::accentFromPalette(wallpaper_.manifest.palette) : Rgba8{},
@@ -1113,7 +1104,7 @@ void App::quit() {
         quitting_ = true;
         const std::wstring names = desktop::describeApps(suspendedApps_);
         dialog_->ask(L"Retomar o " + names + L"?",
-                     L"O AsciiPaper vai fechar. Queres que o " + names + L" volte a correr como estava?",
+                     L"O OpenASCII vai fechar. Queres que o " + names + L" volte a correr como estava?",
                      L"Retomar", L"Deixar pausado",
                      hasWallpaper_ ? ui::accentFromPalette(wallpaper_.manifest.palette) : Rgba8{},
                      [this](bool accepted, bool remember) {
@@ -1184,7 +1175,12 @@ void App::rebuildCanvases() {
         canvases_.clear();
         return;
     }
-    auto monitorOf = [](const render::MonitorSurface* s) { return CanvasMonitor{s->monitor.rect, s->grid.layout()}; };
+    const int inset = options_.windowed ? options_.workInset : 0; // --work-inset: barra simulada
+    auto monitorOf = [inset](const render::MonitorSurface* s) {
+        Rect work = s->monitor.work;
+        if (inset > 0) work = {s->monitor.rect.left, s->monitor.rect.top, s->monitor.rect.right, s->monitor.rect.bottom - inset};
+        return CanvasMonitor{s->monitor.rect, s->grid.layout(), work};
+    };
     const bool span = config_.spanMonitors && !options_.windowed && ready.size() > 1;
     const size_t count = span ? 1 : ready.size();
     if (canvases_.size() != count) {
@@ -1287,6 +1283,11 @@ wallpaper::FrameConstants App::makeFrame(const render::CellCanvas& canvas, const
         f.monitors[i][1] = r.top;
         f.monitors[i][2] = r.right;
         f.monitors[i][3] = r.bottom;
+        const Rect& w = i < c.workCells.size() ? c.workCells[i] : r; // sem a barra de tarefas
+        f.workRects[i][0] = w.left;
+        f.workRects[i][1] = w.top;
+        f.workRects[i][2] = w.right;
+        f.workRects[i][3] = w.bottom;
     }
     SYSTEMTIME st;
     GetLocalTime(&st);
@@ -1307,7 +1308,7 @@ void App::drawError(render::CellCanvas& canvas, const render::MonitorSurface& re
     const int row = std::max(0, p0.y) + 1;
     const Rgba8 fg{255, 120, 120, 255}, bg{24, 4, 6, 235}, dim{200, 200, 210, 255};
     canvas.writeText(device_.context(), ref.atlas, col, row,
-                     " AsciiPaper: erro no wallpaper (o último estado bom continua) ", dim, bg);
+                     " OpenASCII: erro no wallpaper (o último estado bom continua) ", dim, bg);
     std::istringstream lines(errorText_);
     std::string line;
     int r = row + 1;
@@ -1638,6 +1639,9 @@ void App::syncLayout() {
         } else {
             auto& s = **it;
             const bool layoutChanged = !s.monitor.sameLayout(m) || s.index != index;
+            // A barra de tarefas mudou (mexida, escondida automaticamente...): os shaders
+            // recebem a área de trabalho, por isso o canvas tem de ser refeito.
+            if (!(s.monitor.work == m.work)) changed = true;
             if (!s.monitor.sameLayout(m)) {
                 log::info(L"Monitor {}: {}x{}@({},{}) {} DPI -> {}x{}@({},{}) {} DPI", m.device,
                           s.monitor.rect.width(), s.monitor.rect.height(), s.monitor.rect.left,
@@ -1873,7 +1877,7 @@ void App::finishBench() {
     const double gpuMax = g.empty() ? 0.0 : g.back();
     const PerfCounters& bp = benchPerf_;
     const std::wstring report = std::format(
-        L"\n=== AsciiPaper --bench ({}) ===\n"
+        L"\n=== OpenASCII --bench ({}) ===\n"
         L"Wallpaper: {}{}\n"
         L"Frames: {} em {:.1f} s ({:.1f} fps, alvo {})\n"
         L"Frame time (CPU: compute + draw + Present): médio {:.3f} ms, p99 {:.3f} ms, máx {:.2f} ms\n"
@@ -1883,7 +1887,7 @@ void App::finishBench() {
         L"Loop: acordou {:.0f}/s, processou {:.0f} mensagens/s\n"
         L"CPU do processo: {:.2f}% (de {} threads lógicas)\n"
         L"RAM: working set {:.1f} MB, private bytes {:.1f} MB\n",
-        ASCIIPAPER_VERSION_WSTR, widen(wallpaper_.label), cells, t.size(), wall, t.size() / wall,
+        OPENASCII_VERSION_WSTR, widen(wallpaper_.label), cells, t.size(), wall, t.size() / wall,
         std::clamp(settings_.fps, 1, 240), avg, p99, bp.maxRenderMs, gpuAvg, gpuMax, g.size(),
         bp.frames ? bp.sumPresentMs / bp.frames : 0.0, bp.maxPresentMs, bp.hitches, bp.maxGapMs,
         bp.wakeups / wall, bp.messages / wall, cpuPercent, si.dwNumberOfProcessors,
@@ -2059,7 +2063,7 @@ LRESULT App::onMessage(UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
 
     case WM_CLOSE:
-        // "taskkill /im asciipaper.exe" (sem /f), instaladores, etc.: sair com limpeza.
+        // "taskkill /im openascii.exe" (sem /f), instaladores, etc.: sair com limpeza.
         log::info(L"WM_CLOSE recebido: a sair");
         PostQuitMessage(0);
         return 0;

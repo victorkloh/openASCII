@@ -1,6 +1,6 @@
 [meta]
 name = "Clock"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
 description = "Um relógio grande em blocos, com a data e os segundos, sobre um fundo calmo. O rato faz brilhar os dígitos."
 category = "Dados e média"

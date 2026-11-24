@@ -1,8 +1,8 @@
 [meta]
 name = "Planet"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Um planeta procedural a rodar: continentes, nuvens, gelo, cidades à noite e o Sol da estação do ano real. O rato roda-o. Tech demo de esferas e ruído 3D."
+description = "Um planeta inventado a rodar, com continentes, nuvens, gelo e cidades acesas à noite, iluminado pelo Sol da estação do ano real. Passa o rato para o rodar."
 category = "3D e espaço"
 
 [render]

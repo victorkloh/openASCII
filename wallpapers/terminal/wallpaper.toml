@@ -1,8 +1,8 @@
 [meta]
 name = "Terminal"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Um monitor de fósforo antigo a escrever citações, letra a letra. Tech demo de [inputs] text e do pós-processamento CRT ([post])."
+description = "Um monitor de fósforo antigo que escreve citações, letra a letra, e muda de citação a cada 20 segundos. É só para ver: não reage ao rato. Podes pôr as tuas frases no ficheiro quotes.txt, na pasta deste wallpaper."
 category = "Retro"
 
 [render]

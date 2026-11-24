@@ -1,4 +1,4 @@
-# Arquitetura do AsciiPaper
+# Arquitetura do OpenASCII
 
 > Documento vivo: explica **porquê** o código é como é. Atualizado no fim de cada fase.
 > Estado atual: **Fases 0–3** (esqueleto, integração com o desktop, render ASCII, rato + backend shader) + canvas estendido entre monitores e a interface (menu da bandeja e launcher).
@@ -6,7 +6,7 @@
 ## 1. Visão geral
 
 ```
-                ┌──────────────────────── processo asciipaper.exe ─────────────────────────┐
+                ┌──────────────────────── processo openascii.exe ─────────────────────────┐
                 │                                                                          │
  Windows ──msg──▶  Janela controladora (escondida, de topo)                                 │
  (broadcasts,   │    ├─ TaskbarCreated      → reattach ao Explorer                         │
@@ -213,7 +213,7 @@ Até à v0.2 cada monitor tinha a sua grelha e a sua simulação; com o mesmo `t
 - `ui/UiWindow`: render target por janela, DPI por monitor (`WM_DPICHANGED` nas janelas de topo), rato/teclado, tema claro/escuro do Windows (`AppsUseLightTheme`), barra de título da cor do fundo (`DWMWA_CAPTION_COLOR`).
 - **Menu da bandeja** (`ui/TrayFlyout`): janela `WS_POPUP` com cantos redondos do DWM e sombra do sistema, posicionada junto ao ícone (`Shell_NotifyIconGetRect`), fecha ao perder o foco. Um clique no ícone que acabou de o fechar não o reabre (janela de 300 ms).
 - **Launcher** (`ui/Launcher`): fechar só esconde. A UI fala com a app por `ui/AppControl` (catálogo, inspecionar, ajustes, criar, abrir no editor, definições); não conhece D3D nem monitores.
-- **Ajustes ao vivo**: os ajustes do utilizador são um `Theme` sem `base` (`%APPDATA%\AsciiPaper\overrides\<wallpaper>.toml`). Mudar cores ou parâmetros só muda constantes (instantâneo); mudar fonte, resolução ou caracteres reconstrói o atlas; nada disto recompila o shader. Grava no disco ao largar o slider.
+- **Ajustes ao vivo**: os ajustes do utilizador são um `Theme` sem `base` (`%APPDATA%\OpenASCII\overrides\<wallpaper>.toml`). Mudar cores ou parâmetros só muda constantes (instantâneo); mudar fonte, resolução ou caracteres reconstrói o atlas; nada disto recompila o shader. Grava no disco ao largar o slider.
 - **Design**: superfícies neutras escuras (`#0f1115`/`#161920`/`#1e222b`), texto com contraste ≥ 4,5:1, Segoe UI Variable nos controlos e Cascadia Mono nos valores e nos títulos de secção (`// grelha`), controlos com ≥ 28 px. A cor de destaque é **a do wallpaper ativo** (a mais viva da paleta, ajustada para contraste): a interface "veste" o wallpaper.
 - `--ui-screenshot` / `--flyout-screenshot` desenham a interface num PNG (render target WIC), para documentação e testes visuais sem janelas.
 
@@ -240,7 +240,7 @@ Estas apps também desenham por trás dos ícones; ao mesmo tempo que nós, apar
 | tempo real | WinHTTP para Open-Meteo (geocoding + previsão), só com cidade definida | thread próprio, de 15 em 15 min |
 | texto | ficheiro, pasta de código ou uma linha de cada vez; Latin-1 + tabela de slots do atlas | upload quando muda |
 
-Os obstáculos vão num `StructuredBuffer<int4>` por canvas (em células), o texto num `StructuredBuffer<uint>` (256 slots + codepoints) e a imagem numa `Texture2D` com sampler linear (t1–t3, s0). O cbuffer `Frame` cresceu para 864 bytes (espectro, níveis, sistema, tempo, tamanho da imagem, texto).
+Os obstáculos vão num `StructuredBuffer<int4>` por canvas (em células), o texto num `StructuredBuffer<uint>` (256 slots + codepoints) e a imagem numa `Texture2D` com sampler linear (t1–t3, s0). O cbuffer `Frame` cresceu para 992 bytes (espectro, níveis, sistema, tempo, tamanho da imagem, texto e, por monitor, a área de trabalho sem a barra de tarefas).
 
 **Pós-processamento** (`[post]`): no `grid.hlsl`, só quando algum efeito está ligado (bit 0 de `flags`). O glow soma as 15 células vizinhas pesadas pela "tinta" de cada glifo (cobertura média calculada ao construir o atlas, num `StructuredBuffer<float>`).
 
@@ -270,7 +270,7 @@ Detalhes:
 - No arranque guardamos `SPI_GETDESKWALLPAPER`; à saída chamamos `SPI_SETDESKWALLPAPER` com o mesmo caminho e **só `SPIF_SENDCHANGE`** (o Explorer repinta, mas não reescrevemos o registo — assim não estragamos um slideshow ou o Windows Spotlight).
 - Também em `WM_ENDSESSION` (encerramento do Windows) e num `SetUnhandledExceptionFilter` (crash).
 - Testado no layout 24H2: mesmo um `taskkill /f` deixa o wallpaper original visível, porque as nossas janelas simplesmente desaparecem de cima do `WorkerW`.
-- **Instância única**: mutex `Local\AsciiPaper.SingleInstance` (só no modo wallpaper; o `--windowed` pode correr ao lado para desenvolver).
+- **Instância única**: mutex `Local\OpenASCII.SingleInstance` (só no modo wallpaper; o `--windowed` pode correr ao lado para desenvolver).
 
 ## 10. Build
 
@@ -281,7 +281,7 @@ Detalhes:
 
 ## 11. Números medidos (v0.2.0, Release)
 
-Máquina: Windows 11 (build 26200, layout 24H2+), RTX 4060, 2 monitores (1920×1080 + 1080×1920 em coordenadas negativas), 12 threads. Comando: `asciipaper.exe --bench 6` com o `ripple` (60 FPS, células de 6×12 px, 28 800 células por monitor).
+Máquina: Windows 11 (build 26200, layout 24H2+), RTX 4060, 2 monitores (1920×1080 + 1080×1920 em coordenadas negativas), 12 threads. Comando: `openascii.exe --bench 6` com o `ripple` (60 FPS, células de 6×12 px, 28 800 células por monitor).
 
 | Métrica | Valor | Alvo |
 |---|---|---|

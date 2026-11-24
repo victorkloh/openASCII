@@ -15,7 +15,7 @@ bool Tray::add(HWND owner, UINT callbackMessage, HICON icon) {
     nid_.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     nid_.uCallbackMessage = callbackMessage;
     nid_.hIcon = icon;
-    wcscpy_s(nid_.szTip, L"AsciiPaper " ASCIIPAPER_VERSION_WSTR);
+    wcscpy_s(nid_.szTip, L"OpenASCII " OPENASCII_VERSION_WSTR);
     return readd();
 }
 

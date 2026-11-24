@@ -13,14 +13,14 @@ namespace ap::ui {
 
 class Launcher final : public UiWindow {
 public:
-    enum class Page { Wallpaper = 0, New = 1, Settings = 2 };
+    enum class Page { Wallpaper = 0, New = 1, Settings = 2, Welcome = 3 };
 
     Launcher(Gfx& gfx, AppControl& app) : UiWindow(gfx, app) {}
 
     bool create(HINSTANCE instance);
     void show();
     void refresh(); // o wallpaper ativo ou o catálogo mudaram
-    HRESULT renderToPng(const std::wstring& path, int page, int heightDip = 720);
+    HRESULT renderToPng(const std::wstring& path, int page, int heightDip = 720, int widthDip = 1080);
 
 private:
     void build(Ui& ui, float w, float h) override;
@@ -30,12 +30,15 @@ private:
     float buildWallpaperPage(Ui& ui, float x, float y, float w);
     float buildNewPage(Ui& ui, float x, float y, float w);
     float buildSettingsPage(Ui& ui, float x, float y, float w);
+    void buildWelcome(Ui& ui, float w, float h); // primeiros passos (janela inteira, sem barra lateral)
+    void finishWelcome();
     float section(Ui& ui, float x, float y, float w, std::wstring_view title, std::wstring_view hint = {});
     void select(const std::wstring& base);
     void selectVariant(const std::filesystem::path& path);
     std::wstring activeBase() const;
 
     Page page_ = Page::Wallpaper;
+    int welcomeStep_ = 0; // 0 boas-vindas, 1 desempenho, 2 arranque, 3 pronto
     std::vector<WallpaperInfo> items_;
     std::wstring selectedBase_;
     WallpaperEditor editor_;

@@ -1,8 +1,8 @@
 [meta]
 name = "Sandbox"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Areia, água e pedra a cair. Botão esquerdo pinta areia, direito água, o do meio pedra; os dois juntos apagam. Tech demo de autómatos celulares com substeps."
+description = "Areia, água e pedra a cair e a acumular. Pinta com o rato: botão esquerdo areia, direito água, o do meio pedra; os dois juntos apagam. Sem ninguém a mexer, umas bicas no topo vão enchendo o ecrã e o fundo esvazia-se devagar."
 category = "Simulações"
 
 [render]

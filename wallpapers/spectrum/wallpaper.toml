@@ -1,8 +1,8 @@
 [meta]
 name = "Spectrum"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "O som que está a tocar, em ASCII: anel de frequências, barras com picos e ondas de choque na batida. Tech demo de [inputs] audio."
+description = "O som que está a tocar no PC, em ASCII: um anel de frequências, barras com picos e ondas de choque em cada batida. Clica para lançar uma onda. Sem som, fica numa animação calma. O som não é gravado."
 category = "Dados e média"
 
 [render]

@@ -136,7 +136,7 @@ BOOL CALLBACK collectWindow(HWND h, LPARAM lp) {
     const LONG_PTR ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
     if (ex & WS_EX_TRANSPARENT) return TRUE; // sobreposições que deixam passar o rato (overlays)
     const std::wstring cls = win::className(h);
-    if (cls == L"Progman" || cls == L"WorkerW" || cls == L"AsciiPaperController") return TRUE;
+    if (cls == L"Progman" || cls == L"WorkerW" || cls == L"OpenASCIIController") return TRUE;
     RECT r{};
     if (!windowRect(h, r) || r.right - r.left < 32 || r.bottom - r.top < 16) return TRUE;
     out.push_back(r);
@@ -243,7 +243,7 @@ void InputHub::configure(const Manifest& m, const fs::path& dir, const InputSett
             if (s.webcamAllowed) spec = L"webcam";
             else webcamConsentNeeded_ = true;
         } else if (_stricmp(m.source.c_str(), "wallpaper") == 0) {
-            // O wallpaper do Windows que o AsciiPaper substituiu; se for uma cor lisa (sem
+            // O wallpaper do Windows que o OpenASCII substituiu; se for uma cor lisa (sem
             // imagem), a imagem que vem com o próprio Windows.
             std::error_code ec;
             spec = s.windowsWallpaper;

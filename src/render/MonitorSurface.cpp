@@ -8,7 +8,7 @@
 namespace ap::render {
 
 namespace {
-constexpr wchar_t kClassName[] = L"AsciiPaperSurface";
+constexpr wchar_t kClassName[] = L"OpenASCIISurface";
 } // namespace
 
 bool MonitorSurface::registerClass(HINSTANCE instance) {
@@ -29,7 +29,7 @@ bool MonitorSurface::createWindow(HINSTANCE instance, bool windowed, HWND notify
     const DWORD style = windowed ? WS_OVERLAPPEDWINDOW : WS_POPUP;
     // NOACTIVATE + TOOLWINDOW: nunca rouba o foco nem aparece na barra de tarefas.
     const DWORD exStyle = windowed ? 0 : (WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
-    hwnd_ = CreateWindowExW(exStyle, kClassName, L"AsciiPaper", style, CW_USEDEFAULT, CW_USEDEFAULT,
+    hwnd_ = CreateWindowExW(exStyle, kClassName, L"OpenASCII", style, CW_USEDEFAULT, CW_USEDEFAULT,
                             windowed ? 1280 : 0, windowed ? 720 : 0, nullptr, nullptr, instance, this);
     if (!hwnd_) {
         log::error(L"CreateWindowEx falhou (erro {})", GetLastError());

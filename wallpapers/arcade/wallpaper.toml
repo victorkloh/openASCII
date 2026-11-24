@@ -1,8 +1,8 @@
 [meta]
 name = "Arcade"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Um Breakout que joga sozinho; com o rato no ambiente de trabalho, a raquete é tua. Tech demo de um jogo inteiro com estado global num shader."
+description = "Um Breakout que joga sozinho. Põe o rato no ambiente de trabalho e a raquete passa a ser tua."
 category = "Jogos"
 
 [render]

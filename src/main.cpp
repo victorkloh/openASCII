@@ -2,6 +2,9 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <shlobj.h>
+
+#include <filesystem>
 
 #include <string_view>
 #include <vector>
@@ -28,6 +31,38 @@ LONG WINAPI onCrash(EXCEPTION_POINTERS* info) {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+// O OpenASCII chamava-se AsciiPaper. Na primeira vez com o nome novo: as definições, os ajustes
+// e os wallpapers do utilizador passam para a pasta nova, e o arranque com o Windows passa para
+// a entrada nova (a antiga apontava para o asciipaper.exe). Os nomes antigos só existem aqui.
+void migrateFromAsciiPaper() {
+    namespace fs = std::filesystem;
+    PWSTR raw = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &raw))) {
+        const fs::path base(raw);
+        CoTaskMemFree(raw);
+        const fs::path oldDir = base / L"AsciiPaper", newDir = base / L"OpenASCII";
+        std::error_code ec;
+        if (fs::exists(oldDir, ec) && !fs::exists(newDir, ec) && !MoveFileExW(oldDir.c_str(), newDir.c_str(), 0)) {
+            // Mover falha se a versão antiga ainda estiver aberta (log.txt em uso): copiar.
+            fs::copy(oldDir, newDir, fs::copy_options::recursive, ec);
+        }
+    }
+    constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kRunKey, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, &key) != ERROR_SUCCESS) return;
+    if (RegQueryValueExW(key, L"AsciiPaper", nullptr, nullptr, nullptr, nullptr) == ERROR_SUCCESS) {
+        RegDeleteValueW(key, L"AsciiPaper");
+        if (RegQueryValueExW(key, L"OpenASCII", nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS) {
+            wchar_t exe[MAX_PATH * 2] = {};
+            GetModuleFileNameW(nullptr, exe, static_cast<DWORD>(std::size(exe)));
+            const std::wstring cmd = L"\"" + std::wstring(exe) + L"\"";
+            RegSetValueExW(key, L"OpenASCII", 0, REG_SZ, reinterpret_cast<const BYTE*>(cmd.c_str()),
+                           static_cast<DWORD>((cmd.size() + 1) * sizeof(wchar_t)));
+        }
+    }
+    RegCloseKey(key);
+}
+
 } // namespace
 
 int WINAPI wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ PWSTR, _In_ int) {
@@ -41,6 +76,7 @@ int WINAPI wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ PWSTR, _In_ int) {
     const ap::Options& opts = parsed.options;
 
     const bool wantConsole = opts.verbose || opts.showHelp || opts.benchSeconds > 0 || !parsed.error.empty();
+    migrateFromAsciiPaper(); // antes do log: o log.txt vive na pasta que pode ser movida
     ap::log::init(opts.verbose, wantConsole);
     auto logGuard = wil::scope_exit([] { ap::log::shutdown(); });
 
@@ -57,12 +93,12 @@ int WINAPI wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ PWSTR, _In_ int) {
     // Instância única só no modo wallpaper: o --windowed pode correr ao lado, para testar.
     wil::unique_handle mutex;
     if (!opts.windowed) {
-        mutex.reset(CreateMutexW(nullptr, FALSE, L"Local\\AsciiPaper.SingleInstance"));
+        mutex.reset(CreateMutexW(nullptr, FALSE, L"Local\\OpenASCII.SingleInstance"));
         if (GetLastError() == ERROR_ALREADY_EXISTS) {
             // Abrir a app outra vez (atalho do Menu Iniciar, com ela já a correr desde o
             // arranque do Windows) mostra o launcher da instância que já existe, em vez de
             // não fazer nada visível.
-            if (HWND running = FindWindowW(L"AsciiPaperController", nullptr)) {
+            if (HWND running = FindWindowW(L"OpenASCIIController", nullptr)) {
                 DWORD pid = 0;
                 GetWindowThreadProcessId(running, &pid);
                 AllowSetForegroundWindow(pid); // somos nós que temos o foco: passá-lo à outra

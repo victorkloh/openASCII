@@ -37,6 +37,8 @@
 //   localTime, localDate hora e data locais (para relógios)
 //   primaryCenter(), primaryCenterWorld(), primarySizeWorld(), primaryRect(), monitorRectAt(c)
 //                       para centrar coisas no monitor principal ou achar o chão de cada ecrã
+//   primaryWorkRect(), workRectAt(c)
+//                       o mesmo sem a barra de tarefas: o "fundo visível" de cada ecrã
 // ---------------------------------------------------------------------------
 
 cbuffer Frame : register(b0)
@@ -97,6 +99,7 @@ cbuffer Frame : register(b0)
     uint   _atlasSlots;    // glifos no atlas (os glifos brutos de asciiGlyph() estão abaixo disto)
     float  _stepTime;      // `time` com volta a cada hora, calculado em double na CPU (fixedStep)
     uint2  _pad2;
+    int4   _workRects[8];  // por monitor (como _monitors): a área sem a barra de tarefas, em células
 };
 
 StructuredBuffer<float4>   _statePrev : register(t0);
@@ -157,6 +160,11 @@ float2 primaryCenter() { int4 r = primaryRect(); return (float2(r.xy) + float2(r
 float2 primaryCenterWorld() { return primaryCenter() * worldPerCell; }
 float2 primarySizeWorld() { int4 r = primaryRect(); return float2(r.zw - r.xy) * worldPerCell; }
 
+// A ÁREA DE TRABALHO (o monitor sem a barra de tarefas), em células inteiras. Para o que tem
+// de se ver no "fundo do ecrã" (uma raquete, um vaso, uma cidade): o fundo do monitor fica
+// por trás da barra de tarefas. Sem barra (escondida, ou em --windowed) é o monitor todo.
+int4 primaryWorkRect() { return _workRects[min(_primary, max(_monitorCount, 1u) - 1u)]; }
+
 // O retângulo do monitor que contém a célula c (para "o chão" ou "o topo" de cada ecrã).
 int4 monitorRectAt(int2 c)
 {
@@ -164,6 +172,17 @@ int4 monitorRectAt(int2 c)
     {
         int4 r = _monitors[k];
         if (c.x >= r.x && c.y >= r.y && c.x < r.z && c.y < r.w) return r;
+    }
+    return int4(0, 0, int(grid.x), int(grid.y));
+}
+
+// A área de trabalho do monitor que contém a célula c (o "chão visível" de cada ecrã).
+int4 workRectAt(int2 c)
+{
+    [loop] for (uint k = 0; k < _monitorCount; k++)
+    {
+        int4 r = _monitors[k];
+        if (c.x >= r.x && c.y >= r.y && c.x < r.z && c.y < r.w) return _workRects[k];
     }
     return int4(0, 0, int(grid.x), int(grid.y));
 }

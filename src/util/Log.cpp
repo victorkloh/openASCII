@@ -36,7 +36,7 @@ std::wstring appDataFolder() {
     if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_CREATE, nullptr, &raw))) {
         return L".";
     }
-    std::wstring path = std::wstring(raw) + L"\\AsciiPaper";
+    std::wstring path = std::wstring(raw) + L"\\OpenASCII";
     CoTaskMemFree(raw);
     return path;
 }

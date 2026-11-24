@@ -25,7 +25,7 @@ jobs:
         shell: pwsh
         run: |
           $cmake = Get-Content CMakeLists.txt -Raw
-          if ($cmake -notmatch 'project\(AsciiPaper\s+VERSION\s+(\d+\.\d+\.\d+)') { throw 'Versão não encontrada no CMakeLists.txt' }
+          if ($cmake -notmatch 'project\(OpenASCII\s+VERSION\s+(\d+\.\d+\.\d+)') { throw 'Versão não encontrada no CMakeLists.txt' }
           $v = $Matches[1]
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$v") {
             throw "A tag $env:GITHUB_REF_NAME não bate com a versão do CMakeLists.txt ($v)"
@@ -67,10 +67,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          name: AsciiPaper ${{ steps.version.outputs.version }}
+          name: OpenASCII ${{ steps.version.outputs.version }}
           tag_name: v${{ steps.version.outputs.version }}
           body_path: docs/releases/v${{ steps.version.outputs.version }}.md
           files: |
-            dist/AsciiPaper-${{ steps.version.outputs.version }}-setup.exe
-            dist/AsciiPaper-${{ steps.version.outputs.version }}-win64.zip
+            dist/OpenASCII-${{ steps.version.outputs.version }}-setup.exe
+            dist/OpenASCII-${{ steps.version.outputs.version }}-win64.zip
             dist/SHA256SUMS.txt

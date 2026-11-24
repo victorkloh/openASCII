@@ -71,11 +71,15 @@ constexpr CharsetPreset kCharsets[] = {
 } // namespace
 
 bool Launcher::create(HINSTANCE instance) {
-    return createWindow(instance, L"AsciiPaperLauncher", L"AsciiPaper", WS_OVERLAPPEDWINDOW, 0, 1080, 720);
+    return createWindow(instance, L"OpenASCIILauncher", L"OpenASCII", WS_OVERLAPPEDWINDOW, 0, 1080, 720);
 }
 
 void Launcher::show() {
     refresh();
+    if (app_.firstRunPending()) { // primeira vez: começar pelos primeiros passos
+        page_ = Page::Welcome;
+        welcomeStep_ = 0;
+    }
     ShowWindow(hwnd_, IsIconic(hwnd_) ? SW_RESTORE : SW_SHOWNORMAL);
     SetForegroundWindow(hwnd_);
     RECT r{};
@@ -143,12 +147,14 @@ void Launcher::selectVariant(const fs::path& path) {
     }
 }
 
-HRESULT Launcher::renderToPng(const std::wstring& path, int page, int heightDip) {
-    page_ = static_cast<Page>(std::clamp(page, 0, 2));
+HRESULT Launcher::renderToPng(const std::wstring& path, int page, int heightDip, int widthDip) {
+    // 0 wallpaper, 1 novo, 2 definições; 4..7 os passos dos primeiros passos (3 é o diálogo).
+    page_ = page >= 4 ? Page::Welcome : static_cast<Page>(std::clamp(page, 0, 2));
+    welcomeStep_ = std::clamp(page - 4, 0, 3);
     if (page_ == Page::Settings) contentHeight_ = 0; // desenhar do topo
     refresh();
     if (page_ == Page::New) newName_ = L"Aurora";
-    return renderToPngImpl(path, 1080, static_cast<float>(heightDip), heightDip > 720 ? 1.0f : 1.5f);
+    return renderToPngImpl(path, static_cast<float>(widthDip), static_cast<float>(heightDip), heightDip > 720 ? 1.0f : 1.5f);
 }
 
 namespace {
@@ -220,6 +226,10 @@ float Launcher::section(Ui& ui, float x, float y, float w, std::wstring_view tit
 
 void Launcher::build(Ui& ui, float w, float h) {
     const Tokens& t = ui.theme();
+    if (page_ == Page::Welcome) {
+        buildWelcome(ui, w, h);
+        return;
+    }
     // Barra lateral
     ui.fill(rect(0, 0, kSidebar, h), t.surface);
     ui.line({kSidebar, 0}, {kSidebar, h}, t.border);
@@ -248,10 +258,10 @@ void Launcher::buildSidebar(Ui& ui, float h) {
     TextStyle logo = mono(18);
     logo.weight = DWRITE_FONT_WEIGHT_BOLD;
     ui.text(rect(x + 2, y, 34, 30), L"A_", t.accent, logo);
-    ui.text(rect(x + 38, y, 150, 30), L"AsciiPaper", t.text, heading(15));
+    ui.text(rect(x + 38, y, 150, 30), L"OpenASCII", t.text, heading(15));
     TextStyle ver = mono(11);
     ver.align = DWRITE_TEXT_ALIGNMENT_TRAILING;
-    ui.text(rect(x, y, w, 30), L"v" ASCIIPAPER_VERSION_WSTR, t.faint, ver);
+    ui.text(rect(x, y, w, 30), L"v" OPENASCII_VERSION_WSTR, t.faint, ver);
     y += 58;
     // Pesquisa: pelo nome, título, categoria ou descrição (sem distinguir maiúsculas).
     ui.textField(makeId(L"search"), rect(x, y, w, 32), search_, L"Procurar wallpapers");
@@ -411,9 +421,14 @@ float Launcher::buildWallpaperPage(Ui& ui, float x, float y, float w) {
     TextStyle desc = smallText(13);
     desc.wrap = true;
     desc.valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
-    ui.text(rect(tx, y + 62, tw, std::max(44.0f, imgH - 34 - 62 - 12)), widen(m.description), t.muted, desc);
+    // O cabeçalho cresce com a descrição: com o launcher estreito, uma descrição longa (o que
+    // o wallpaper faz, o que o rato muda) passava por cima dos botões.
+    const std::wstring description = widen(m.description);
+    const float descH = ui.textHeight(description, desc, tw);
+    const float headerH = std::max(imgH, 62 + descH + 14 + 34);
+    ui.text(rect(tx, y + 62, tw, descH + 4), description, t.muted, desc);
 
-    const float by = y + imgH - 34;
+    const float by = y + headerH - 34;
     const bool isLoading = same(app_.loadingPath(), editor_.path);
     if (isActive) {
         ui.button(makeId(L"applied"), rect(tx, by, 120, 34), L"Em uso", ButtonKind::Secondary, L'\xE73E', false);
@@ -430,7 +445,7 @@ float Launcher::buildWallpaperPage(Ui& ui, float x, float y, float w) {
         app_.openInEditor(editor_.path);
     }
     if (ui.iconButton(makeId(L"open-folder"), rect(tx + 276, by, 34, 34), L'\xE8B7')) app_.openFolder(editor_.path);
-    y += imgH + 20;
+    y += headerH + 20;
 
     if (isActive && !app_.lastError().empty()) {
         const std::wstring err = app_.lastError();
@@ -813,7 +828,7 @@ float Launcher::buildNewPage(Ui& ui, float x, float y, float w) {
         y += 24;
     }
     TextStyle hint = mono(11.5f);
-    ui.text(rect(x, y, w, 18), L"Fica em %APPDATA%\\AsciiPaper\\wallpapers. Guia: docs/CREATING_WALLPAPERS.md", t.faint,
+    ui.text(rect(x, y, w, 18), L"Fica em %APPDATA%\\OpenASCII\\wallpapers. Guia: docs/CREATING_WALLPAPERS.md", t.faint,
             hint);
     return y + 24;
 }
@@ -912,13 +927,20 @@ float Launcher::buildSettingsPage(Ui& ui, float x, float y, float w) {
     y = section(ui, x, y, w, L"sistema");
     changed |= ui.toggle(makeId(L"autostart"), rect(x - 12, y, rw + 12, 54), L"Iniciar com o Windows",
                          L"Arranca discretamente na bandeja quando inicias sessão.", s.autostart);
-    y += 70;
+    y += 58;
+    if (s.autostart) {
+        changed |= ui.toggle(makeId(L"autostart-fast"), rect(x - 12, y, rw + 12, 54), L"Arranque rápido",
+                             L"Logo que entras na conta, sem a espera do Windows (tarefa agendada, sem admin).",
+                             s.autostartFast);
+        y += 58;
+    }
+    y += 12;
 
-    // Wallpaper Engine / Lively: pausar enquanto o AsciiPaper corre (com os comandos deles).
+    // Wallpaper Engine / Lively: pausar enquanto o OpenASCII corre (com os comandos deles).
     y = section(ui, x, y, w, L"outras apps de wallpaper",
-                L"O Wallpaper Engine e o Lively podem aparecer por baixo do AsciiPaper. As definições deles não mudam.");
+                L"O Wallpaper Engine e o Lively podem aparecer por baixo do OpenASCII. As definições deles não mudam.");
     const std::wstring status = app_.otherAppsStatus();
-    ui.text(rect(x, y, rw, 18), status.empty() ? L"Nenhuma app pausada agora." : status + L" pelo AsciiPaper.",
+    ui.text(rect(x, y, rw, 18), status.empty() ? L"Nenhuma app pausada agora." : status + L" pelo OpenASCII.",
             status.empty() ? t.faint : t.accent, smallText(12.5f));
     y += 28;
     auto choiceRow = [&](std::wstring_view label, Id id, const std::wstring_view* options, int count, int& value) {
@@ -950,8 +972,186 @@ float Launcher::buildSettingsPage(Ui& ui, float x, float y, float w) {
         app_.openFolder(log::folder());
     }
     y += 58;
-    ui.text(rect(x, y, w, 18), L"AsciiPaper " ASCIIPAPER_VERSION_WSTR L" · licença MIT", t.faint, mono(11.5f));
+    ui.text(rect(x, y, w, 18), L"OpenASCII " OPENASCII_VERSION_WSTR L" · licença MIT", t.faint, mono(11.5f));
     return y + 24;
+}
+
+// ---------------------------------------------------------------------------
+// Primeiros passos: na primeira vez que a app arranca, quatro passos curtos ocupam a janela
+// inteira (sem a barra lateral): boas-vindas, desempenho, arranque com o Windows e "pronto".
+// Cada escolha aplica-se logo (é o mesmo que mudar nas Definições).
+// ---------------------------------------------------------------------------
+
+void Launcher::finishWelcome() {
+    app_.finishFirstRun();
+    page_ = Page::Wallpaper;
+    welcomeStep_ = 0;
+    refresh();
+}
+
+void Launcher::buildWelcome(Ui& ui, float w, float h) {
+    const Tokens& t = ui.theme();
+    const float cw = std::min(w - 96.0f, 640.0f);
+    const float x = (w - cw) / 2;
+    float y = 40;
+    constexpr int kSteps = 4;
+    const int step = std::clamp(welcomeStep_, 0, kSteps - 1);
+
+    // Marca e progresso.
+    TextStyle logo = mono(18);
+    logo.weight = DWRITE_FONT_WEIGHT_BOLD;
+    ui.text(rect(x + 2, y, 34, 30), L"A_", t.accent, logo);
+    ui.text(rect(x + 38, y, 200, 30), L"OpenASCII", t.text, heading(15));
+    for (int k = 0; k < kSteps; ++k) { // pontos: o atual mais comprido
+        const float dw = k == step ? 22.0f : 8.0f;
+        float dx = x + cw;
+        for (int j = kSteps - 1; j >= k; --j) dx -= (j == step ? 22.0f : 8.0f) + 6.0f;
+        ui.fill(rect(dx + 6, y + 11, dw, 8), k <= step ? t.accent : t.raised, 4);
+    }
+    y += 64;
+
+    GlobalSettings s = app_.settings();
+    bool changed = false;
+    TextStyle body = smallText(13.5f);
+    body.wrap = true;
+    body.valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+    auto title = [&](std::wstring_view text) {
+        ui.text(rect(x, y, cw, 36), text, t.text, heading(26));
+        y += 48;
+    };
+    auto para = [&](std::wstring_view text, D2D1_COLOR_F color) {
+        const float th = ui.textHeight(text, body, cw);
+        ui.text(rect(x, y, cw, th + 4), text, color, body);
+        y += th + 16;
+    };
+    auto infoBox = [&](wchar_t icon, std::wstring_view heading2, std::wstring_view text) {
+        const float th = ui.textHeight(text, body, cw - 60);
+        const R box = rect(x, y, cw, th + 50);
+        ui.fill(box, t.raised, 10);
+        ui.icon(rect(x + 16, y + 15, 20, 20), icon, t.accent, 15);
+        TextStyle hs = smallText(13.5f);
+        hs.weight = DWRITE_FONT_WEIGHT_SEMI_BOLD;
+        ui.text(rect(x + 46, y + 13, cw - 60, 22), heading2, t.text, hs);
+        ui.text(rect(x + 46, y + 37, cw - 60, th + 4), text, t.muted, body);
+        y += th + 50 + 14;
+    };
+    auto toggleRow = [&](std::wstring_view id, std::wstring_view label, std::wstring_view desc, bool& value) {
+        changed |= ui.toggle(makeId(id), rect(x - 12, y, cw + 12, 54), label, desc, value);
+        y += 58;
+    };
+
+    switch (step) {
+    case 0:
+        title(L"Bem-vindo ao OpenASCII");
+        para(L"Wallpapers ASCII animados que vivem atrás dos ícones do ambiente de trabalho. Muitos reagem ao rato, e "
+             L"todos param sozinhos quando não estão à vista, para não gastarem bateria nem desempenho.",
+             t.muted);
+        infoBox(L'\xE946', L"Onde fica a app",
+                L"No ícone da área de notificação, junto ao relógio (talvez escondido na seta ^). Clica nele para "
+                L"trocar de wallpaper ou pausar. Esta janela, o launcher, é onde personalizas tudo.");
+        para(L"Vamos acertar o desempenho e o arranque com o Windows. Leva meio minuto, e fica tudo nas Definições "
+             L"para mudares quando quiseres.",
+             t.muted);
+        break;
+
+    case 1: {
+        title(L"Desempenho");
+        para(L"Quantas vezes por segundo o wallpaper se redesenha. Menos FPS gasta menos energia.", t.muted);
+        struct Choice {
+            const wchar_t* label;
+            int fps;
+            const wchar_t* hint;
+        };
+        static constexpr Choice kChoices[] = {
+            {L"30 fps · poupança", 30, L"Bom para portáteis: a maioria dos efeitos continua suave."},
+            {L"60 fps · fluido", 60, L"Recomendado num PC de secretária."},
+            {L"cada wallpaper decide", 0, L"Cada wallpaper usa o ritmo que pede (até 60 fps)."},
+        };
+        float cx = x;
+        const wchar_t* hint = L"";
+        for (int k = 0; k < static_cast<int>(std::size(kChoices)); ++k) {
+            const float chipW = ui.textWidth(kChoices[k].label, smallText(12.5f)) + 28;
+            const bool sel = s.fps == kChoices[k].fps;
+            if (sel) hint = kChoices[k].hint;
+            if (ui.chip(makeId(L"wel-fps", k), rect(cx, y, chipW, 30), kChoices[k].label, sel) && !sel) {
+                s.fps = kChoices[k].fps;
+                if (s.fps == 0) s.maxFps = 60;
+                changed = true;
+            }
+            cx += chipW + 8;
+        }
+        y += 40;
+        if (*hint == 0) hint = L"Fixo noutro valor (podes mudar nas Definições).";
+        ui.text(rect(x, y, cw, 20), hint, t.faint, smallText(12.5f));
+        y += 40;
+        toggleRow(L"wel-pause-max", L"Pausar com uma janela maximizada", L"O monitor tapado deixa de desenhar (0% de CPU).",
+                  s.pauseOnMaximized);
+        toggleRow(L"wel-pause-bat", L"Pausar na poupança de bateria", L"Quando o Windows liga a poupança de bateria.",
+                  s.pauseOnBatterySaver);
+        toggleRow(L"wel-span", L"Estender por todos os monitores",
+                  L"Um só efeito atravessa os ecrãs, como no modo Estender do Windows.", s.spanMonitors);
+        break;
+    }
+
+    case 2:
+        title(L"Arrancar com o Windows");
+        para(L"Opcional. Se ligares, o OpenASCII arranca sozinho quando entras na tua conta e fica no ícone da "
+             L"bandeja.",
+             t.muted);
+        toggleRow(L"wel-autostart", L"Iniciar com o Windows", L"Podes desligar quando quiseres, nas Definições.",
+                  s.autostart);
+        if (s.autostart) {
+            toggleRow(L"wel-fast", L"Arranque rápido",
+                      L"Logo que entras na conta, sem a espera que o Windows impõe às apps de arranque.",
+                      s.autostartFast);
+            para(L"O arranque rápido usa uma tarefa do Agendador de Tarefas do Windows, só para a tua conta e sem "
+                 L"pedir administrador. O normal usa a lista de arranque do Windows, que as atrasa uns segundos.",
+                 t.faint);
+            infoBox(L'\xE72E', L"E com o PC bloqueado?",
+                    L"Se bloqueares o PC (Win+L), o OpenASCII continua aberto, em pausa e a 0% de CPU: quando "
+                    L"desbloqueias, o wallpaper já lá está. Antes de entrares na conta nenhuma app pode correr, e o "
+                    L"ecrã de bloqueio é sempre o do Windows.");
+        }
+        break;
+
+    default: {
+        title(L"Tudo pronto");
+        static constexpr std::pair<wchar_t, const wchar_t*> kTips[] = {
+            {L'\xE8B9', L"Escolhe um wallpaper na lista à esquerda ou no ícone da bandeja."},
+            {L'\xE790', L"Na página de cada wallpaper mudas cores, caracteres e efeitos de ecrã, e vês tudo ao vivo."},
+            {L'\xE943', L"Novo wallpaper cria o teu a partir de um modelo e abre o código no teu editor."},
+            {L'\xE713', L"Estas opções ficam todas nas Definições."},
+        };
+        for (const auto& [icon, text] : kTips) {
+            const float th = ui.textHeight(text, body, cw - 44);
+            ui.icon(rect(x, y + 1, 22, 22), icon, t.accent, 15);
+            ui.text(rect(x + 38, y, cw - 44, th + 4), text, t.muted, body);
+            y += std::max(26.0f, th) + 14;
+        }
+        break;
+    }
+    }
+    if (changed) app_.setSettings(s);
+
+    // Navegação, fixa em baixo.
+    const float by = h - 40 - 36;
+    ui.line({x, by - 20}, {x + cw, by - 20}, t.border);
+    if (step < kSteps - 1 && ui.button(makeId(L"wel-skip"), rect(x, by, 110, 36), L"Saltar", ButtonKind::Ghost)) {
+        finishWelcome();
+        return;
+    }
+    const wchar_t* next = step == 0 ? L"Vamos lá" : step == kSteps - 1 ? L"Começar a usar" : L"Seguinte";
+    if (step > 0 && ui.button(makeId(L"wel-back"), rect(x + cw - 160 - 8 - 110, by, 110, 36), L"Voltar",
+                              ButtonKind::Secondary)) {
+        welcomeStep_ = step - 1;
+    }
+    if (ui.button(makeId(L"wel-next"), rect(x + cw - 160, by, 160, 36), next, ButtonKind::Primary)) {
+        if (step == kSteps - 1) {
+            finishWelcome();
+            return;
+        }
+        welcomeStep_ = step + 1;
+    }
 }
 
 } // namespace ap::ui

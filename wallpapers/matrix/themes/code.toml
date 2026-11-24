@@ -1,4 +1,4 @@
-# A chuva de código com código verdadeiro: o dos próprios wallpapers do AsciiPaper.
+# A chuva de código com código verdadeiro: o dos próprios wallpapers do OpenASCII.
 # Troca o caminho por uma pasta tua (ex.: "folder:%USERPROFILE%\\source") para ver o teu.
 base = "matrix"
 palette = ["#000000", "#03240f", "#0a5a2a", "#1fbf5a", "#7dffb0"]

@@ -246,6 +246,29 @@ float Ui::textWidth(std::wstring_view s, const TextStyle& style) {
     return w;
 }
 
+float Ui::textHeight(std::wstring_view s, const TextStyle& style, float maxWidth) {
+    // Altura do texto com quebra de linha numa largura (para caixas que crescem com o texto).
+    std::wstring key(s);
+    key += static_cast<wchar_t>(1);
+    key += std::to_wstring(static_cast<int>(style.size * 16.0f));
+    key += static_cast<wchar_t>(L'0' + static_cast<int>(style.kind));
+    key += std::to_wstring(static_cast<int>(style.weight));
+    key += L'@' + std::to_wstring(static_cast<int>(maxWidth));
+    if (auto it = widths_.find(key); it != widths_.end()) return it->second;
+    if (widths_.size() > 4096) widths_.clear();
+    float h = 0.0f;
+    ComPtr<IDWriteTextLayout> layout;
+    if (SUCCEEDED(gfx_.dwrite()->CreateTextLayout(s.data(), static_cast<UINT32>(s.size()), gfx_.format(style),
+                                                  std::max(1.0f, maxWidth), 10000, &layout))) {
+        layout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+        DWRITE_TEXT_METRICS m{};
+        layout->GetMetrics(&m);
+        h = m.height;
+    }
+    widths_.emplace(std::move(key), h);
+    return h;
+}
+
 float Ui::measureText(std::wstring_view s, const TextStyle& style) {
     ComPtr<IDWriteTextLayout> layout;
     if (FAILED(gfx_.dwrite()->CreateTextLayout(s.data(), static_cast<UINT32>(s.size()), gfx_.format(style), 10000,

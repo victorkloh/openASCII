@@ -23,7 +23,7 @@ uint64_t ft(const FILETIME& f) { return (static_cast<uint64_t>(f.dwHighDateTime)
 // GET https://<host><path> e devolve o corpo (UTF-8). Vazio se falhar.
 std::string httpGet(const wchar_t* host, const std::wstring& path) {
     using hinternet = wil::unique_any<HINTERNET, decltype(&WinHttpCloseHandle), WinHttpCloseHandle>;
-    hinternet session(WinHttpOpen(L"AsciiPaper/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME,
+    hinternet session(WinHttpOpen(L"OpenASCII/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME,
                                   WINHTTP_NO_PROXY_BYPASS, 0));
     if (!session) return {};
     WinHttpSetTimeouts(session.get(), 5000, 5000, 8000, 8000);
@@ -176,16 +176,21 @@ void Weather::run(std::wstring city) {
             jsonNumber(body, "cloud_cover", cc, "\"current\":") && jsonNumber(body, "wind_speed_10m", ws, "\"current\":")) {
             jsonNumber(body, "is_day", day, "\"current\":");
             jsonNumber(body, "weather_code", code, "\"current\":");
-            std::lock_guard lock(mutex_);
-            data_.valid = true;
-            data_.temperature = static_cast<float>(t);
-            data_.rainMm = static_cast<float>(p);
-            data_.cloud = static_cast<float>(cc / 100.0);
-            data_.windMs = static_cast<float>(ws);
-            data_.isDay = day > 0.5;
-            data_.code = static_cast<int>(code);
-            data_.latitude = lat;
-            data_.longitude = lon;
+            {
+                // Só a cópia dos dados fica dentro do lock: o thread de UI lê-os a cada frame
+                // (now()). A espera até à próxima atualização ficou aqui dentro por engano e
+                // pendurava a app durante 15 minutos.
+                std::lock_guard lock(mutex_);
+                data_.valid = true;
+                data_.temperature = static_cast<float>(t);
+                data_.rainMm = static_cast<float>(p);
+                data_.cloud = static_cast<float>(cc / 100.0);
+                data_.windMs = static_cast<float>(ws);
+                data_.isDay = day > 0.5;
+                data_.code = static_cast<int>(code);
+                data_.latitude = lat;
+                data_.longitude = lon;
+            }
             log::info(L"Tempo real: {:.1f} °C, chuva {:.1f} mm, nuvens {:.0f}%, vento {:.1f} m/s, código {}", t, p, cc, ws,
                       static_cast<int>(code));
             retry = 30;

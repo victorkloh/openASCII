@@ -29,6 +29,7 @@ struct GlobalSettings {
     bool pauseOnMaximized = true;
     bool pauseOnBatterySaver = true;
     bool autostart = false;
+    bool autostartFast = false; // arranque rápido (tarefa agendada) em vez da entrada Run
     int maxFps = 60;
     int fps = 0;              // FPS do fundo: 0 = automático
     int otherAppsOnStart = 0; // 0 perguntar, 1 pausar sempre, 2 ignorar
@@ -80,6 +81,10 @@ public:
     // Playlist (trocar de wallpaper sozinho de N em N minutos).
     virtual bool inPlaylist(const std::filesystem::path& path) const = 0;
     virtual void setInPlaylist(const std::filesystem::path& path, bool included) = 0;
+
+    // Primeiros passos: mostrados no launcher na primeira vez que a app arranca.
+    virtual bool firstRunPending() const = 0;
+    virtual void finishFirstRun() = 0; // concluídos ou saltados: não voltam a aparecer
 
     // Janelas
     virtual void openLauncher() = 0;

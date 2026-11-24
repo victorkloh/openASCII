@@ -15,7 +15,7 @@
 static const float BRICK_W = 6.0; // células
 static const int ROWS = 6;
 
-static int4 P;   // monitor principal (células)
+static int4 P;   // área de trabalho do monitor principal (células, sem a barra de tarefas)
 int2 cellB() { return P.xy; }
 int2 cellS() { return P.xy + int2(1, 0); }
 int2 cellH() { return P.xy + int2(2, 0); }
@@ -56,7 +56,9 @@ CellOut cell(CellIn i)
     o.fg = 0;
     o.state = 0;
     int2 c = int2(i.id);
-    P = primaryRect();
+    // O jogo todo dentro da área de trabalho do monitor principal: com primaryRect() a raquete
+    // ficava por trás da barra de tarefas (3 linhas acima do fundo do MONITOR).
+    P = primaryWorkRect();
     float2 wpc = worldPerCell;
 
     float4 B = prev(cellB());   // bola: x, y (mundo), vx, vy (mundo/s)

@@ -1,5 +1,5 @@
 #pragma once
-// Configuração global em %APPDATA%\AsciiPaper\config.toml.
+// Configuração global em %APPDATA%\OpenASCII\config.toml.
 // Por agora só o essencial; a config completa (wallpaper por monitor, overrides de
 // params...) chega na Fase 5.
 
@@ -27,6 +27,8 @@ struct Config {
     std::vector<std::string> playlist; // nomes (ou caminhos) pela ordem
     int playlistMinutes = 0;           // 0 = desligada
     bool playlistShuffle = false;
+    // Os "primeiros passos" já foram vistos (concluídos ou saltados). Em falta = mostrar.
+    bool firstRunDone = false;
 
     static std::filesystem::path path();
     static Config load(); // ficheiro em falta ou inválido = valores por defeito (e um aviso no log)

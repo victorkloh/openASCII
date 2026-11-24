@@ -1,4 +1,4 @@
-# AsciiPaper
+# OpenASCII
 
 **Wallpapers ASCII animados e interativos para Windows 10/11**, desenhados atrás dos ícones do ambiente de trabalho. Um único `.exe` nativo e pequeno (C++20, Win32, Direct3D 11), sem browser embutido nem runtime pesado. Cada wallpaper é programável e fácil de partilhar.
 
@@ -8,7 +8,7 @@
 | **valley** | **clock** | **fire** |
 | ![valley](wallpapers/valley/preview.png) | ![clock](wallpapers/clock/preview.png) | ![fire](wallpapers/fire/preview.png) |
 
-> **Estado: alpha (v0.5.0).** Fases 0–3 feitas, mais o launcher e o menu da bandeja (parte da Fase 5). Os wallpapers em Lua (fluid, particles, life, clock) chegam na Fase 4. Ver o [roadmap](#roadmap).
+> **Estado: alpha (v0.5.0), a primeira versão pública.** O motor, 28 wallpapers, o launcher, o menu da bandeja e o instalador estão feitos. Os wallpapers programados em Lua chegam numa versão futura. Ver o [roadmap](#roadmap).
 
 ## Efeitos incluídos
 
@@ -82,17 +82,19 @@ Medido (Release, RTX 4060, 2 monitores, valley a 30 fps): **0,7% de CPU**, GPU 0
 
 Na página de [Releases](../../releases) há duas formas, ambas sem permissões de administrador:
 
-**Instalador (recomendado): `AsciiPaper-<versão>-setup.exe`**
-1. Corre o instalador. Fica em `%LOCALAPPDATA%\Programs\AsciiPaper`, só para o teu utilizador.
+**Instalador (recomendado): `OpenASCII-<versão>-setup.exe`**
+1. Corre o instalador. Fica em `%LOCALAPPDATA%\Programs\OpenASCII`, só para o teu utilizador.
 2. Escolhe o que instalar: **completa** (a app e os 28 wallpapers predefinidos) ou **só a app**, sem nenhum wallpaper pronto a usar. Neste caso, o fundo do Windows fica à vista até criares o teu primeiro wallpaper no launcher.
-3. Deixa marcado **Iniciar o AsciiPaper com o Windows** se o quiseres sempre ligado. Podes mudar isto depois nas Definições.
+3. Deixa marcado **Iniciar o OpenASCII com o Windows** se o quiseres sempre ligado. Podes mudar isto depois nas Definições.
 4. No fim, o launcher abre. O atalho do Menu Iniciar também o abre, mesmo com a app já a correr.
 
 Para desinstalar: Definições do Windows › Aplicações. A app é fechada primeiro e o teu wallpaper original volta. As tuas definições e os wallpapers que criaste só são apagados se disseres que sim.
 
-**Portátil: `AsciiPaper-<versão>-win64.zip`**
-1. Extrai o zip para uma pasta e corre `asciipaper.exe`.
+**Portátil: `OpenASCII-<versão>-win64.zip`**
+1. Extrai o zip para uma pasta e corre `openascii.exe`.
 2. Para arrancar com o Windows, liga a opção nas Definições do launcher.
+
+Na primeira vez, o launcher abre nos **primeiros passos**: desempenho (FPS, pausas, vários monitores) e arranque com o Windows. No arranque com o Windows há a opção **Arranque rápido**, que usa uma tarefa agendada só para a tua conta, em vez da lista de arranque do Windows (que atrasa as apps uns segundos). Nenhuma app consegue arrancar antes de iniciares sessão, mas com o PC bloqueado o OpenASCII continua aberto, em pausa: ao desbloquear, o wallpaper já lá está.
 
 Em ambos os casos, o ícone aparece na área de notificação (junto ao relógio, talvez escondido na seta **^**). Clica nele para escolher o wallpaper, pausar, abrir o launcher ou sair. Ao sair, o teu wallpaper original volta.
 
@@ -107,6 +109,7 @@ O Windows SmartScreen pode avisar ("O Windows protegeu o PC"), porque o executá
 | `--bench <segundos>` | Mede frame time médio/p99, CPU e RAM e sai |
 | `--screenshot <ficheiro.png>` | Renderiza 3 s fora do ecrã, grava um PNG e sai |
 | `--launcher` | Abre o launcher ao arrancar |
+| `--work-inset <px>` | Com `--windowed`: simula uma barra de tarefas de `<px>` em baixo (para testar o que fica no fundo do ecrã) |
 | `--verbose`, `-v` | Logs detalhados, também na consola |
 | `--help`, `-h` | Ajuda |
 
@@ -114,10 +117,10 @@ O Windows SmartScreen pode avisar ("O Windows protegeu o PC"), porque o executá
 
 | Onde | O quê |
 |---|---|
-| `%APPDATA%\AsciiPaper\config.toml` | wallpaper escolhido, `interaction`, `max_fps`, `span_monitors`, regras de pausa (o launcher escreve-o por ti) |
-| `%APPDATA%\AsciiPaper\overrides\` | os teus ajustes por wallpaper (cores, resolução, parâmetros...), no formato de tema |
-| `%APPDATA%\AsciiPaper\wallpapers\` | os teus wallpapers (além dos que vêm ao lado do `.exe`) |
-| `%APPDATA%\AsciiPaper\log.txt` | log (roda acima de 1 MB) |
+| `%APPDATA%\OpenASCII\config.toml` | wallpaper escolhido, `interaction`, `max_fps`, `span_monitors`, regras de pausa (o launcher escreve-o por ti) |
+| `%APPDATA%\OpenASCII\overrides\` | os teus ajustes por wallpaper (cores, resolução, parâmetros...), no formato de tema |
+| `%APPDATA%\OpenASCII\wallpapers\` | os teus wallpapers (além dos que vêm ao lado do `.exe`) |
+| `%APPDATA%\OpenASCII\log.txt` | log (roda acima de 1 MB) |
 
 ## Criar o teu wallpaper
 
@@ -145,6 +148,10 @@ Guia completo, com a API toda e temas sem código: **[docs/CREATING_WALLPAPERS.m
 Requisitos: **Windows 10/11 x64**, **Visual Studio 2022** com o workload *Desenvolvimento para desktop com C++* (MSVC v143 + Windows SDK) e **Git**.
 
 ```powershell
+# 0. O código
+git clone https://github.com/victorkloh/openASCII.git
+cd openASCII
+
 # 1. Ferramentas (CMake, Ninja, vcpkg) numa pasta do utilizador, sem admin
 pwsh scripts/setup.ps1
 
@@ -152,13 +159,13 @@ pwsh scripts/setup.ps1
 pwsh scripts/build.ps1
 
 # 3. Correr numa janela, com logs na consola
-build\msvc\Release\asciipaper.exe --windowed --verbose
+build\msvc\Release\openascii.exe --windowed --verbose
 
 # 4. Criar a release em dist/: zip portátil, instalador (com o Inno Setup 6 instalado) e SHA256SUMS.txt
 pwsh scripts/package.ps1
 ```
 
-O instalador é descrito em [`installer/AsciiPaper.iss`](installer/AsciiPaper.iss) (Inno Setup 6: `winget install JRSoftware.InnoSetup`). No GitHub, criar uma tag `vX.Y.Z` igual à versão do `CMakeLists.txt` compila, testa e prepara uma release em rascunho com estes ficheiros (`.github/workflows/release.yml`).
+O instalador é descrito em [`installer/OpenASCII.iss`](installer/OpenASCII.iss) (Inno Setup 6: `winget install JRSoftware.InnoSetup`). No GitHub, criar uma tag `vX.Y.Z` igual à versão do `CMakeLists.txt` compila, testa e prepara uma release em rascunho com estes ficheiros (`.github/workflows/release.yml`).
 
 Com CMake ≥ 3.25 e vcpkg já instalados, basta definir `VCPKG_ROOT` e usar os presets (`cmake --preset msvc`, `cmake --build --preset msvc-release`, `ctest --preset msvc-release`). As dependências (`wil`, `tomlplusplus`, `doctest`) vêm do vcpkg em modo manifest, compiladas estaticamente.
 

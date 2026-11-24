@@ -1,8 +1,8 @@
 [meta]
 name = "HUD"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Painel ao vivo: hora em grande, CPU e RAM com histórico, e o tempo lá fora (escreve a cidade nas Definições). Tech demo de [inputs] system e weather."
+description = "Um painel ao vivo com a hora em grande, o uso do processador e da memória e o tempo lá fora. Para ver o tempo, escreve a tua cidade nas Definições. É só para ver: não reage ao rato."
 category = "Dados e média"
 
 [render]

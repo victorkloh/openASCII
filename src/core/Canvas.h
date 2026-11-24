@@ -14,6 +14,7 @@ namespace ap {
 struct CanvasMonitor {
     Rect rectPx;     // retângulo do monitor no ecrã virtual (px físicos)
     GridLayout grid; // a grelha que o monitor desenha (células e margens dele)
+    Rect workPx;     // área de trabalho (sem a barra de tarefas); vazia = o monitor todo
 };
 
 struct CanvasLayout {
@@ -23,6 +24,9 @@ struct CanvasLayout {
     int cellW = 1;    // tamanho de referência de uma célula do canvas (px físicos)
     int cellH = 1;
     std::vector<Rect> monitorCells; // por monitor: a zona do canvas que ele mostra (em células)
+    // Por monitor: as células que NÃO ficam por baixo da barra de tarefas (só células inteiras).
+    // É aqui que um wallpaper põe o que tem de se ver no "fundo do ecrã" (a raquete, o vaso...).
+    std::vector<Rect> workCells;
     int reference = 0;              // índice (em monitorCells) do monitor principal
 
     int cellCount() const { return cols * rows; }

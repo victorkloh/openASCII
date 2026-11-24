@@ -29,8 +29,9 @@ uint season() // 0 primavera, 1 verão, 2 outono, 3 inverno (hemisfério norte)
 
 float growth() { return saturate(time / max(param("minutes") * 60.0, 10.0)); }
 
-// Onde fica a raiz e o tamanho do tronco (unidades de mundo), no monitor principal.
-float2 rootPos() { int4 r = primaryRect(); return float2((r.x + r.z) * 0.5, r.w - 7) * worldPerCell; }
+// Onde fica a raiz e o tamanho do tronco (unidades de mundo), no monitor principal. O vaso
+// assenta no fundo da área de TRABALHO: no fundo do monitor ficava meio escondido pela barra.
+float2 rootPos() { int4 r = primaryWorkRect(); return float2((r.x + r.z) * 0.5, r.w - 7) * worldPerCell; }
 float trunkLen() { return primarySizeWorld().y * 0.17 * param("size"); }
 
 // Calcula o ramo k (célula reservada): segue o caminho desde a raiz pelos bits de k.

@@ -12,8 +12,8 @@
 // Formato das linhas: "texto|autor" ('|' muda de linha e o autor fica alinhado à direita).
 
 static const uint HEX[16] = {48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70};
-static const uint TITLE[22] = {65, 83, 67, 73, 73, 80, 65, 80, 69, 82, 32, 47, 47, 32, 84, 69, 82, 77, 73, 78, 65, 76};
-// "ASCIIPAPER // TERMINAL"
+static const uint TITLE[21] = {79, 80, 69, 78, 65, 83, 67, 73, 73, 32, 47, 47, 32, 84, 69, 82, 77, 73, 78, 65, 76};
+// "OPENASCII // TERMINAL"
 
 // Onde cai o caractere i (devolve o índice do caractere que está em (row, col), ou -1).
 // Quebra gulosa por palavras numa largura W; '|' força uma linha nova (o autor).
@@ -65,15 +65,17 @@ CellOut cell(CellIn i)
     o.state = 0;
     o.fg = palette(0.6);
     int2 c = int2(i.id);
-    int4 mon = monitorRectAt(c);
-    int4 P = primaryRect();
+    // A área visível (sem a barra de tarefas): a barra de título fica por baixo de uma barra de
+    // tarefas no topo, e a citação centrada no que se vê.
+    int4 mon = workRectAt(c);
+    int4 P = primaryWorkRect();
     float4 phosphor = palette(0.8), dim = palette(0.3);
 
     // Barra de título com o relógio, no topo de cada monitor.
     if (c.y == mon.y + 1)
     {
         int k = c.x - mon.x - 2;
-        if (k >= 0 && k < 22) { o.glyph = asciiGlyph(TITLE[k]); o.fg = phosphor; return o; }
+        if (k >= 0 && k < 21) { o.glyph = asciiGlyph(TITLE[k]); o.fg = phosphor; return o; }
         int r = mon.z - 3 - c.x; // relógio HH:MM:SS alinhado à direita
         uint hh = uint(localTime.x), mm = uint(localTime.y), ss = uint(localTime.z);
         uint clock[8] = {48u + ss % 10u, 48u + ss / 10u, 58u, 48u + mm % 10u, 48u + mm / 10u, 58u, 48u + hh % 10u, 48u + hh / 10u};

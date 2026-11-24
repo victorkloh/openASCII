@@ -54,7 +54,7 @@ float rowHeight() { return thumbHeight() + 4.0f + kLabelH + kGridGap; }
 
 bool TrayFlyout::create(HINSTANCE instance) {
     // CS_DROPSHADOW: sombra do sistema; WS_EX_TOOLWINDOW: fora da barra de tarefas e do Alt+Tab.
-    if (!createWindow(instance, L"AsciiPaperFlyout", L"AsciiPaper", WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+    if (!createWindow(instance, L"OpenASCIIFlyout", L"OpenASCII", WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
                       static_cast<int>(kWidth), 420, CS_DROPSHADOW)) {
         return false;
     }
@@ -245,7 +245,7 @@ void TrayFlyout::build(Ui& ui, float w, float h) {
     TextStyle title;
     title.size = 14.0f;
     title.weight = DWRITE_FONT_WEIGHT_SEMI_BOLD;
-    ui.text(rect(kPad + 30, y, 140, kHeaderH), L"AsciiPaper", t.text, title);
+    ui.text(rect(kPad + 30, y, 140, kHeaderH), L"OpenASCII", t.text, title);
     const R pauseBtn = rect(w - kPad - 28, y, 28, 28);
     if (ui.iconButton(makeId(L"pause"), pauseBtn, paused ? L'\xE768' : L'\xE769')) app_.setPaused(!paused);
     TextStyle status = eyebrowStyle();

@@ -1,8 +1,8 @@
 [meta]
 name = "Bonsai"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Um bonsai que cresce devagar (um diferente cada dia) e muda com as estações do ano real. Tech demo de estado global em células reservadas."
+description = "Um bonsai que cresce à tua frente em poucos minutos, diferente em cada dia, e muda com as estações do ano real. O rato faz vento nos ramos."
 category = "Ambiente"
 
 [render]

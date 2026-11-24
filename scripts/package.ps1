@@ -1,6 +1,6 @@
 # Compila em Release e prepara os ficheiros de uma release em dist/:
-#   AsciiPaper-<versão>-setup.exe      instalador (se o Inno Setup 6 estiver instalado)
-#   AsciiPaper-<versão>-win64.zip      versão portátil (descompactar e correr)
+#   OpenASCII-<versão>-setup.exe      instalador (se o Inno Setup 6 estiver instalado)
+#   OpenASCII-<versão>-win64.zip      versão portátil (descompactar e correr)
 #   SHA256SUMS.txt                     somas de verificação dos dois
 # Uso: pwsh scripts/package.ps1 [-SkipBuild] [-RequireInstaller]
 param(
@@ -14,15 +14,15 @@ if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot 'build.ps1') -Config Release
 }
 
-# Uma só fonte para a versão: project(AsciiPaper VERSION x.y.z) no CMakeLists.txt.
+# Uma só fonte para a versão: project(OpenASCII VERSION x.y.z) no CMakeLists.txt.
 $cmake = Get-Content (Join-Path $root 'CMakeLists.txt') -Raw
-if ($cmake -notmatch 'project\(AsciiPaper\s+VERSION\s+(\d+\.\d+\.\d+)') { throw 'Versão não encontrada no CMakeLists.txt' }
+if ($cmake -notmatch 'project\(OpenASCII\s+VERSION\s+(\d+\.\d+\.\d+)') { throw 'Versão não encontrada no CMakeLists.txt' }
 $version = $Matches[1]
 
-$exePath = Join-Path $root 'build\msvc\Release\asciipaper.exe'
+$exePath = Join-Path $root 'build\msvc\Release\openascii.exe'
 if (-not (Test-Path $exePath)) { throw "Falta $exePath (compila primeiro ou tira o -SkipBuild)" }
 
-$name = "AsciiPaper-$version-win64"
+$name = "OpenASCII-$version-win64"
 $dist = Join-Path $root 'dist'
 $stage = Join-Path $dist $name
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
@@ -47,9 +47,9 @@ $iscc = @(
     "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
 ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 if ($iscc) {
-    $setup = Join-Path $dist "AsciiPaper-$version-setup.exe"
+    $setup = Join-Path $dist "OpenASCII-$version-setup.exe"
     Remove-Item $setup -Force -ErrorAction SilentlyContinue
-    & $iscc /Q "/DAppVersion=$version" "/DSourceDir=$stage" "/O$dist" (Join-Path $root 'installer\AsciiPaper.iss')
+    & $iscc /Q "/DAppVersion=$version" "/DSourceDir=$stage" "/O$dist" (Join-Path $root 'installer\OpenASCII.iss')
     if ($LASTEXITCODE) { throw 'O Inno Setup falhou a compilar o instalador' }
     $artifacts += $setup
 } elseif ($RequireInstaller) {
@@ -64,7 +64,7 @@ $sums = foreach ($a in $artifacts) {
 }
 $sums | Set-Content (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
 
-$exe = Get-Item (Join-Path $stage 'asciipaper.exe')
-Write-Host ("AsciiPaper {0} (exe: {1:N0} KB)" -f $version, ($exe.Length / 1KB))
+$exe = Get-Item (Join-Path $stage 'openascii.exe')
+Write-Host ("OpenASCII {0} (exe: {1:N0} KB)" -f $version, ($exe.Length / 1KB))
 foreach ($a in $artifacts) { Write-Host ("  {0}  ({1:N1} MB)" -f (Split-Path $a -Leaf), ((Get-Item $a).Length / 1MB)) }
 Write-Host "  SHA256SUMS.txt"

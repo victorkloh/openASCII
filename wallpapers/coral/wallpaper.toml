@@ -1,8 +1,8 @@
 [meta]
 name = "Coral"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Reação-difusão de Gray-Scott: corais, manchas e labirintos que crescem sozinhos. O rato semeia. Tech demo de equações diferenciais com substeps."
+description = "Corais, manchas e labirintos que crescem sozinhos e vão mudando de forma. Passa o rato para semear; clica para uma semente maior."
 category = "Simulações"
 
 [render]

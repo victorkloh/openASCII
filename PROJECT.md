@@ -1,4 +1,4 @@
-# AsciiPaper — Motor de wallpapers ASCII reativos para Windows
+# OpenASCII — Motor de wallpapers ASCII reativos para Windows
 
 > Nome provisório. Este ficheiro é o brief do projeto: lê-o todo antes de escrever código.
 
@@ -51,7 +51,7 @@ Não é um clone do Wallpaper Engine: não usamos browser embutido, runtime pesa
 ## 4. Arquitetura
 
 ```
-asciipaper/
+openascii/
 ├─ CMakeLists.txt, vcpkg.json, README.md
 ├─ docs/ARCHITECTURE.md        # decisões e explicação dos sistemas (manter atualizado)
 ├─ src/
@@ -194,10 +194,10 @@ function on_click(x, y, button) fluid:splash(x, y, 4.0) end
 ## 6. App
 
 - **Tray icon**: lista de wallpapers e temas, pausar/retomar, recarregar, abrir pasta de wallpapers, abrir config, "Iniciar com o Windows", sair.
-- **Config global** em `%APPDATA%\AsciiPaper\config.toml`: wallpaper por monitor ou o mesmo em todos, FPS máximo, regras de pausa, modo de interação do rato, overrides de params.
-- **Pastas de wallpapers**: as embutidas (ao lado do exe) + `%APPDATA%\AsciiPaper\wallpapers\` (as do utilizador).
+- **Config global** em `%APPDATA%\OpenASCII\config.toml`: wallpaper por monitor ou o mesmo em todos, FPS máximo, regras de pausa, modo de interação do rato, overrides de params.
+- **Pastas de wallpapers**: as embutidas (ao lado do exe) + `%APPDATA%\OpenASCII\wallpapers\` (as do utilizador).
 - **Autostart**: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
-- **Log** em `%APPDATA%\AsciiPaper\log.txt` com rotação.
+- **Log** em `%APPDATA%\OpenASCII\log.txt` com rotação.
 - **Argumentos CLI**:
   - `--windowed` → renderiza numa janela normal redimensionável (para desenvolver e testar sem mexer no desktop)
   - `--wallpaper <pasta>` → carrega um wallpaper específico

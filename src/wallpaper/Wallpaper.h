@@ -27,7 +27,7 @@ struct LoadResult {
     std::string error; // vazio = ok
 };
 
-// Pastas onde procuramos wallpapers: ao lado do .exe e em %APPDATA%\AsciiPaper\wallpapers.
+// Pastas onde procuramos wallpapers: ao lado do .exe e em %APPDATA%\OpenASCII\wallpapers.
 std::vector<fs::path> wallpaperRoots();
 
 // "ripple" -> <raiz>/ripple; um caminho para pasta ou .toml é usado tal como está.
@@ -57,7 +57,7 @@ fs::path overridesFile(const std::string& key);
 Theme loadOverrides(const std::string& key);
 bool saveOverrides(const std::string& key, const Theme& overrides);
 
-// Pasta dos wallpapers do utilizador (%APPDATA%\AsciiPaper\wallpapers), criada se preciso.
+// Pasta dos wallpapers do utilizador (%APPDATA%\OpenASCII\wallpapers), criada se preciso.
 fs::path userWallpaperDir();
 
 // Transforma um nome em nome de pasta: "Meu Fogo!" -> "meu-fogo".

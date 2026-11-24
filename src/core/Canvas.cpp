@@ -17,6 +17,22 @@ Rect gridAreaPx(const CanvasMonitor& m) {
     return {x0, y0, x0 + m.grid.cols * m.grid.cellW, y0 + m.grid.rows * m.grid.cellH};
 }
 
+// As células do canvas que ficam INTEIRAS dentro da área de trabalho do monitor (uma célula
+// meio tapada pela barra de tarefas não conta), limitadas à zona que o monitor mostra.
+Rect workCellsOf(const CanvasLayout& c, const CanvasMonitor& m, const Rect& monitorCells) {
+    const Rect work = m.workPx.empty() ? m.rectPx : intersect(m.workPx, m.rectPx);
+    if (work.empty()) return monitorCells;
+    // Só os lados onde há mesmo uma barra encolhem; nos outros fica a zona do monitor tal como
+    // está (que inclui as células só meio dentro dele, num monitor desalinhado da grelha).
+    Rect cells = monitorCells;
+    if (work.left > m.rectPx.left) cells.left = ceilDiv(work.left - c.originPx.x, c.cellW);
+    if (work.top > m.rectPx.top) cells.top = ceilDiv(work.top - c.originPx.y, c.cellH);
+    if (work.right < m.rectPx.right) cells.right = floorDiv(work.right - c.originPx.x, c.cellW);
+    if (work.bottom < m.rectPx.bottom) cells.bottom = floorDiv(work.bottom - c.originPx.y, c.cellH);
+    cells = intersect(cells, monitorCells);
+    return cells.empty() ? monitorCells : cells;
+}
+
 } // namespace
 
 CanvasLayout computeSpanCanvas(std::span<const CanvasMonitor> monitors, size_t reference) {
@@ -45,6 +61,7 @@ CanvasLayout computeSpanCanvas(std::span<const CanvasMonitor> monitors, size_t r
                    ceilDiv(g.right - c.originPx.x, c.cellW), ceilDiv(g.bottom - c.originPx.y, c.cellH)};
         cells = intersect(cells, Rect{0, 0, c.cols, c.rows});
         c.monitorCells.push_back(cells);
+        c.workCells.push_back(workCellsOf(c, m, cells));
     }
     return c;
 }
@@ -57,6 +74,7 @@ CanvasLayout computeSingleCanvas(const CanvasMonitor& m) {
     c.cols = std::max(1, m.grid.cols);
     c.rows = std::max(1, m.grid.rows);
     c.monitorCells.push_back({0, 0, c.cols, c.rows});
+    c.workCells.push_back(workCellsOf(c, m, c.monitorCells.back()));
     return c;
 }
 

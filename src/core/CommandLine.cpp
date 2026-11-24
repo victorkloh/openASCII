@@ -59,6 +59,10 @@ ParseResult parseCommandLine(std::span<const std::wstring_view> args) {
             const auto* v = needValue(a);
             if (!v) return result;
             o.uiHeight = std::clamp(_wtoi(std::wstring(*v).c_str()), 300, 6000);
+        } else if (a == L"--ui-width") {
+            const auto* v = needValue(a);
+            if (!v) return result;
+            o.uiWidth = std::clamp(_wtoi(std::wstring(*v).c_str()), 600, 4000);
         } else if (a == L"--screenshot-delay") {
             const auto* v = needValue(a);
             if (!v) return result;
@@ -82,6 +86,13 @@ ParseResult parseCommandLine(std::span<const std::wstring_view> args) {
             if (!v) return result;
             o.flyoutScreenshot = std::wstring(*v);
             o.windowed = true;
+        } else if (a == L"--work-inset") {
+            const auto* v = needValue(a);
+            if (!v) return result;
+            if (!parsePositiveInt(*v, o.workInset)) {
+                result.error = L"--work-inset espera um número inteiro de píxeis > 0";
+                return result;
+            }
         } else if (a == L"--bench") {
             const auto* v = needValue(a);
             if (!v) return result;
@@ -98,13 +109,14 @@ ParseResult parseCommandLine(std::span<const std::wstring_view> args) {
 }
 
 const wchar_t* usageText() {
-    return L"Uso: asciipaper [opções]\n"
+    return L"Uso: openascii [opções]\n"
            L"  --windowed            renderiza numa janela normal (desenvolvimento)\n"
            L"  --wallpaper <pasta>   carrega um wallpaper específico (Fase 3)\n"
            L"  --bench <segundos>    mede frame time, CPU e RAM\n"
            L"  --screenshot <png>    renderiza 3 s fora do ecrã (1280x720), grava um PNG e sai\n"
            L"  --screenshot-delay <s> segundos de animação antes do --screenshot (por defeito 3)\n"
            L"  --launcher            abre o launcher ao arrancar\n"
+           L"  --work-inset <px>     com --windowed: simula uma barra de tarefas em baixo (testar o fundo)\n"
            L"  --verbose, -v         logs detalhados, também na consola\n"
            L"  --help, -h            mostra esta ajuda\n";
 }

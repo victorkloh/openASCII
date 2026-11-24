@@ -1,8 +1,8 @@
 [meta]
 name = "Life"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "O Jogo da Vida de Conway, com cor pela idade e rastos. O rato desenha vida; clicar lança planadores. Tech demo de autómatos com estado."
+description = "O Jogo da Vida de Conway: células que nascem e morrem, com cor pela idade e rastos. Passa o rato para desenhar vida; clica para lançar planadores."
 category = "Simulações"
 
 [render]

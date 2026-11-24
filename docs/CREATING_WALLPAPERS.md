@@ -1,4 +1,4 @@
-# Criar wallpapers para o AsciiPaper
+# Criar wallpapers para o OpenASCII
 
 Um wallpaper é **uma pasta** com um `wallpaper.toml` e um ficheiro de código. Partilha-a como zip ou num repositório git.
 
@@ -11,7 +11,7 @@ meu-wallpaper/
    └─ noite.toml
 ```
 
-O caminho mais rápido: launcher → **Novo wallpaper**. Escolhe um modelo, dá um nome, e a app cria a pasta em `%APPDATA%\AsciiPaper\wallpapers\`, ativa-o e abre o `main.hlsl` no teu editor. Também podes criar a pasta à mão nesse sítio; aparece logo no launcher e no menu da bandeja.
+O caminho mais rápido: launcher → **Novo wallpaper**. Escolhe um modelo, dá um nome, e a app cria a pasta em `%APPDATA%\OpenASCII\wallpapers\`, ativa-o e abre o `main.hlsl` no teu editor. Também podes criar a pasta à mão nesse sítio; aparece logo no launcher e no menu da bandeja.
 
 > Os wallpapers do tipo *script* (Lua) chegam na Fase 4. Por agora só há o tipo *shader*.
 
@@ -61,7 +61,7 @@ CellOut cell(CellIn i)
 Para desenvolver, corre numa janela, com hot reload (grava o ficheiro e vês logo o resultado):
 
 ```powershell
-asciipaper.exe --windowed --verbose --wallpaper C:\caminho\para\meu-wallpaper
+openascii.exe --windowed --verbose --wallpaper C:\caminho\para\meu-wallpaper
 ```
 
 Se houver um erro, aparece num canto do ecrã com a linha (`main.hlsl(12,5): error ...`) e o último estado bom continua a correr.
@@ -130,6 +130,7 @@ Por defeito o wallpaper só reage quando o rato está **sobre o desktop** (não 
 | `primaryCenterWorld()`, `primarySizeWorld()` | centro e tamanho do monitor principal em mundo (para centrar um relógio, um sol, um modelo 3D) |
 | `primaryCenter()`, `primaryRect()` | o mesmo em células |
 | `monitorRectAt(int2 c)` | retângulo (células) do monitor onde está `c`: o "chão" de cada ecrã para fogo, areia, aquários |
+| `primaryWorkRect()`, `workRectAt(int2 c)` | o mesmo, mas só a **área de trabalho** (sem a barra de tarefas, só células inteiras). Usa-os para o que tem de se ver no fundo ou no topo do ecrã (a raquete do `arcade`, o vaso do `bonsai`, a areia do `aquarium`). O fundo do monitor fica por trás da barra. Para testar sem desktop: `--windowed --work-inset 48` simula uma barra de 48 px. |
 | `localTime`, `localDate` | hora (h, m, s com fração) e data (ano, mês, dia, dia da semana) locais |
 | `cellDistance(a, b)` | distância em alturas de célula, corrigida para ficar redonda no ecrã |
 | `noise(p)`, `fbm(p)` | ruído suave em [0,1], 2D ou 3D; `fbm` soma 5 oitavas |
@@ -169,7 +170,7 @@ text_interval = 20    # "lines:": segundos por linha
 | `hasSource()`, `sampleSource(uv)`, `fitSource(p, min, size, cover)`, `sourceEdge(uv, cellUv)` | a imagem/vídeo: amostrar, encaixar num retângulo, contornos (Sobel) |
 | `textLength`, `textChar(i)`, `textGlyph(i)`, `textAge()`, `textLineIndex()` | o texto (Latin-1) e, no modo `lines:`, há quanto tempo a linha atual apareceu |
 
-- `source`: caminho relativo à pasta do wallpaper ou absoluto, com `%VARIAVEIS%`. `"wallpaper"` = o wallpaper do Windows que o AsciiPaper substituiu. `"webcam"` pede autorização na primeira vez. No launcher, "Escolher imagem ou vídeo" troca a imagem sem mexer no código.
+- `source`: caminho relativo à pasta do wallpaper ou absoluto, com `%VARIAVEIS%`. `"wallpaper"` = o wallpaper do Windows que o OpenASCII substituiu. `"webcam"` pede autorização na primeira vez. No launcher, "Escolher imagem ou vídeo" troca a imagem sem mexer no código.
 - `text`: texto literal, `file:<ficheiro>`, `folder:<pasta>` (o código de uma pasta, até 64 K caracteres) ou `lines:<ficheiro>` (uma linha de cada vez; `#` = comentário).
 - Um **tema** também pode ligar entradas (secção `[inputs]` no tema): `synthwave/beat` liga o áudio, `valley/weather` o tempo real, `matrix/code` o texto.
 

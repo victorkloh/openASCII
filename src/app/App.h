@@ -18,6 +18,7 @@
 #include "app/Config.h"
 #include "app/Tray.h"
 #include "core/CommandLine.h"
+#include "desktop/Autostart.h"
 #include "desktop/OtherWallpaperApps.h"
 #include "desktop/PauseManager.h"
 #include "desktop/WorkerW.h"
@@ -42,7 +43,7 @@ class ConfirmDialog;
 namespace ap::app {
 
 // Mensagem registada que uma segunda instância envia à primeira para mostrar o launcher.
-inline constexpr wchar_t kOpenLauncherMessage[] = L"AsciiPaper.OpenLauncher";
+inline constexpr wchar_t kOpenLauncherMessage[] = L"OpenASCII.OpenLauncher";
 
 struct Settings {
     int fps = 30;    // vem do wallpaper.toml
@@ -89,6 +90,8 @@ public:
     void quitImmediately() override { PostQuitMessage(0); }
     std::filesystem::path loadingPath() const override { return queuedLoad_.empty() ? loadingPath_ : queuedLoad_; }
     void setModalLoop(bool active) override;
+    bool firstRunPending() const override { return !config_.firstRunDone; }
+    void finishFirstRun() override;
 
 private:
     using WinEventHook = wil::unique_any<HWINEVENTHOOK, decltype(&::UnhookWinEvent), ::UnhookWinEvent>;
@@ -197,7 +200,7 @@ private:
     bool otherAppsChecked_ = false; // Wallpaper Engine/Lively: verificado uma vez, com um wallpaper à vista
     int modalLoops_ = 0;          // janelas nossas em loop modal (arrastar/redimensionar)
     PTP_WAIT modalWait_ = nullptr; // durante um loop modal: espera pelo timer de frames
-    bool autostartCached_ = false; // lido do registo só ao arrancar e ao mudar
+    desktop::AutostartMode autostartCached_ = desktop::AutostartMode::Off; // lido só ao arrancar e ao mudar
 
     // Wallpaper ativo
     std::filesystem::path wallpaperPath_; // pasta ou tema pedido

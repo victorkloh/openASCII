@@ -54,8 +54,9 @@ struct alignas(16) FrameConstants {
     uint32_t atlasSlots;                             // glifos no atlas (limite dos glifos brutos)
     float stepTime;                                  // tempo com volta a cada hora (fixedStep)
     uint32_t pad[2];
+    int32_t workRects[8][4];                         // por monitor: a área sem a barra de tarefas, em células
 };
-static_assert(sizeof(FrameConstants) == 864, "tem de bater com o cbuffer Frame do prelude.hlsl");
+static_assert(sizeof(FrameConstants) == 992, "tem de bater com o cbuffer Frame do prelude.hlsl");
 
 // Recursos opcionais que o wallpaper pode ler (nullptr = não usa).
 struct ShaderInputs {

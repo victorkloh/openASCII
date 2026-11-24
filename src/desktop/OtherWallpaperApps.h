@@ -1,6 +1,6 @@
 #pragma once
 // Outras apps de wallpaper animado (Wallpaper Engine, Lively) também desenham por trás dos
-// ícones. Se correrem ao mesmo tempo que o AsciiPaper, frames delas aparecem por baixo do
+// ícones. Se correrem ao mesmo tempo que o OpenASCII, frames delas aparecem por baixo do
 // nosso. Pausamo-las com os comandos DELAS (linha de comandos oficial), por isso as
 // definições e os wallpapers escolhidos nessas apps não mudam; ao sair, retomamo-las.
 

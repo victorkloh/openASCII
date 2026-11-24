@@ -1,8 +1,8 @@
 [meta]
 name = "Mirror"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Tu em ASCII, ao vivo pela webcam (só liga se aceitares). Mexe-te e saltam faíscas. Tech demo de webcam e deteção de movimento."
+description = "Tu em ASCII, ao vivo pela webcam. A câmara só liga se aceitares, e nada é gravado nem enviado. Mexe-te para saltarem faíscas."
 category = "Dados e média"
 
 [render]

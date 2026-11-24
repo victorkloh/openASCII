@@ -11,7 +11,7 @@ Legenda: ✅ feito e verificado · 🟡 feito, falta verificação manual ou tem
 - ✅ Repositório git local, commits pequenos por passo lógico, tags `v0.1.0` → `v0.4.0`.
 - ✅ Dependências instaladas sem admin em `%USERPROFILE%\dev-tools` (CMake, Ninja, vcpkg, GitHub CLI); `scripts/setup.ps1` reproduz.
 - ✅ Documentação: `README.md`, `docs/ARCHITECTURE.md`, `docs/CREATING_WALLPAPERS.md`, `CHANGELOG.md`, `LICENSE` (MIT).
-- ✅ Releases locais: `dist/AsciiPaper-<versão>-win64.zip` + SHA-256 (`scripts/package.ps1`).
+- ✅ Releases locais: `dist/OpenASCII-<versão>-win64.zip` + SHA-256 (`scripts/package.ps1`).
 - ⏳ Publicar no GitHub: precisa de `gh auth login` e de decidires se o repositório é público ou privado (pediste para ficar local por agora).
 - ⏳ clang-cl: os presets existem, mas o componente LLVM do Visual Studio não está instalado (pede admin).
 
@@ -99,7 +99,7 @@ Legenda: ✅ feito e verificado · 🟡 feito, falta verificação manual ou tem
 - 🟡 Não apanhei um caso real (nenhum em ~3,5 h de monitorização). Sugestão: fundo do Windows em "Imagem" ou "Cor sólida".
 
 ## 19. "Prepara os ficheiros para a primeira release" + "o instalador pergunta se instala os wallpapers predefinidos"
-- ✅ Instalador Inno Setup (`installer/AsciiPaper.iss`): por utilizador, sem admin, componentes "app" e "wallpapers predefinidos" (opcional), "Iniciar com o Windows", atalho que abre o launcher, fecha a app antes de atualizar/desinstalar, pergunta antes de apagar os dados do utilizador.
+- ✅ Instalador Inno Setup (`installer/OpenASCII.iss`): por utilizador, sem admin, componentes "app" e "wallpapers predefinidos" (opcional), "Iniciar com o Windows", atalho que abre o launcher, fecha a app antes de atualizar/desinstalar, pergunta antes de apagar os dados do utilizador.
 - ✅ App sem wallpapers: fica na bandeja sem tapar o fundo do Windows; launcher e menu convidam a criar o primeiro.
 - ✅ Abrir a app outra vez mostra o launcher da instância que já corre.
 - ✅ Media Foundation carregado só quando preciso (as edições N do Windows não o têm).

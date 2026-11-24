@@ -1,8 +1,8 @@
 [meta]
 name = "Fluid"
-author = "AsciiPaper"
+author = "OpenASCII"
 version = "1.0.0"
-description = "Um fluido incompressível a sério (stable fluids): arrasta-o com o rato, clica para explosões. Tech demo de multi-pass (24 passos por frame)."
+description = "Fumo colorido num fluido que se mexe como a sério. Arrasta o rato para o empurrar; clica para uma explosão. Sem ninguém a mexer, uns jatos mantêm-no em movimento."
 category = "Simulações"
 
 [render]

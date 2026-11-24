@@ -42,7 +42,8 @@ CellOut cell(CellIn i)
     float2 w = i.world;
     int4 mon = monitorRectAt(c);
     float monTop = float(mon.y) * worldPerCell.y;
-    float monBottom = float(mon.w) * worldPerCell.y;
+    // A cidade e os lançamentos no fundo da área de trabalho (não por trás da barra de tarefas).
+    float monBottom = float(workRectAt(c).w) * worldPerCell.y;
     float monH = monBottom - monTop;
 
     // Rasto: a cor do frame anterior a apagar-se.

@@ -54,6 +54,30 @@ TEST_CASE("canvas estendido: monitor com DPI maior tem células maiores, mesma e
     CHECK(c.monitorCells[1].left == 320);
 }
 
+TEST_CASE("área de trabalho: as células tapadas pela barra de tarefas ficam de fora") {
+    // Barra de tarefas de 48 px em baixo no principal; células de 12 px: 1080/12 = 90 linhas,
+    // a área de trabalho acaba em 1032 px = 86 linhas inteiras.
+    CanvasMonitor primary = monitor({0, 0, 1920, 1080}, 6, 12);
+    primary.workPx = {0, 0, 1920, 1032};
+    CanvasMonitor vertical = monitor({-1080, -615, 0, 1305}, 6, 12); // sem barra: área = monitor
+    const CanvasMonitor ms[] = {primary, vertical};
+    const auto c = computeSpanCanvas(ms, 0);
+    REQUIRE(c.workCells.size() == 2);
+    CHECK(c.workCells[0].top == c.monitorCells[0].top);
+    CHECK(c.workCells[0].bottom == c.monitorCells[0].bottom - 4); // 48 px = 4 linhas
+    CHECK(c.workCells[0].left == c.monitorCells[0].left);
+    CHECK(c.workCells[1] == c.monitorCells[1]);
+
+    // Barra de 40 px: a linha meio tapada (1040..1052) também fica de fora.
+    primary.workPx = {0, 0, 1920, 1040};
+    const auto single = computeSingleCanvas(primary);
+    CHECK(single.workCells[0] == Rect{0, 0, single.cols, 86});
+
+    // Barra em cima.
+    primary.workPx = {0, 48, 1920, 1080};
+    CHECK(computeSingleCanvas(primary).workCells[0].top == 4);
+}
+
 TEST_CASE("canvas de um só monitor = a grelha dele") {
     const auto m = monitor({-1920, 0, 0, 1080}, 7, 15);
     const auto c = computeSingleCanvas(m);
